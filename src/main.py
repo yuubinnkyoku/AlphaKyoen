@@ -1,5 +1,6 @@
 import torch
 import torch.optim as optim
+import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
 from game import Board
