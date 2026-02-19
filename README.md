@@ -4,4 +4,7 @@
 
 - プリ計算
 - Bitboard
-- 
+
+```cmd
+uv run src/main.py
+```
