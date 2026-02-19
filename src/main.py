@@ -83,9 +83,12 @@ def train():
 
     optimizer = optim.Adam(net.parameters(), lr=LR)
 
+    # TF32 を有効化 (Ampere 以降の GPU で行列積を高速化)
+    torch.set_float32_matmul_precision("high")
+
     # Mixed Precision (CUDA のみ): Tensor Core を活用して約 2x 高速化
     use_amp = DEVICE == "cuda"
-    scaler = torch.cuda.amp.GradScaler() if use_amp else None
+    scaler = torch.amp.GradScaler("cuda") if use_amp else None
 
     epoch = 0
     try:
@@ -125,7 +128,7 @@ def train():
                 optimizer.zero_grad(set_to_none=True)
 
                 if use_amp:
-                    with torch.cuda.amp.autocast():
+                    with torch.amp.autocast("cuda"):
                         out_pi, out_v = net(feats)
                         loss_pi = -torch.sum(pis * out_pi) / feats.size(0)
                         loss_v  = F.mse_loss(out_v, vs)
