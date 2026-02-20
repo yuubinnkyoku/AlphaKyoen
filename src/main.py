@@ -5,7 +5,8 @@ import numpy as np
 import os
 from collections import deque
 from game import Board
-from model import SmallResNet
+from model import ResNet
+from mcts import mcts_search_with_policy
 
 # 設定
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -15,80 +16,63 @@ LR = 0.0002           # 学習率を少し下げて安定化
 SAVE_DIR = "models"
 MAX_MEMORY = 50000    # リプレイバッファの最大サイズ
 TRAIN_EPOCHS = 3      # 1回のデータ生成に対する学習エポック数
+MCTS_SIMULATIONS = 128
+TEMP_THRESHOLD = 16
 
 
-def self_play_batch(net, n_games=GAMES_PER_EPOCH):
-    """全ゲームを同時進行させ、バッチ推論でデータを生成する。
-    
-    従来の逐次実行 (n_games × n_steps 回の単独推論) と異なり、
-    各ステップで全アクティブゲームをバッチとしてまとめて推論するため
-    GPU/CPU ともに大幅に高速化される。
-    """
+class TrainingPolicyValueNet:
+    """Adapter to use the current training net as MCTS evaluator."""
+
+    def __init__(self, net, device=None):
+        self.net = net
+        self.device = device or next(net.parameters()).device
+
+    @torch.no_grad()
+    def predict(self, board):
+        x = torch.from_numpy(board.get_feature()).unsqueeze(0).to(self.device)
+        log_pi, value = self.net(x)
+        policy = torch.exp(log_pi)[0].cpu().numpy()
+        return policy, float(value.item())
+
+
+def self_play_alpha_zero(net, n_games=GAMES_PER_EPOCH, num_simulations=MCTS_SIMULATIONS):
+    """Generate (state, pi, z) from AlphaZero-style MCTS self-play."""
     net.eval()
+    evaluator = TrainingPolicyValueNet(net)
 
-    boards = [Board() for _ in range(n_games)]
-    histories = [[] for _ in range(n_games)]
-    active = list(range(n_games))
     dataset = []
 
-    while active:
-        # アクティブな全ゲームの特徴量を一括収集してバッチ推論
-        features = np.array([boards[i].get_feature() for i in active], dtype=np.float32)
-        feature_tensor = torch.from_numpy(features).to(DEVICE)
+    for _ in range(n_games):
+        board = Board()
+        history = []
 
-        with torch.no_grad():
-            log_pi, _ = net(feature_tensor)
-            pi = torch.exp(log_pi).cpu().numpy()  # (n_active, 81)
+        while True:
+            # AlphaZero: high temperature in opening, near-greedy later.
+            temperature = 1.0 if board.move_count < TEMP_THRESHOLD else 1e-8
+            move, pi_target = mcts_search_with_policy(
+                root_board=board,
+                policy_value_net=evaluator,
+                num_simulations=num_simulations,
+                add_root_noise=True,
+                temperature=temperature,
+            )
 
-        next_active = []
-        for batch_idx, game_idx in enumerate(active):
-            board = boards[game_idx]
-            valid_moves = board.valid_moves()
-
-            pi_valid = pi[batch_idx][valid_moves]
-            pi_sum = pi_valid.sum()
-            if pi_sum > 0:
-                pi_valid /= pi_sum
-            else:
-                pi_valid = np.ones_like(pi_valid) / len(pi_valid)
-
-            # 探索を促進するためにディリクレノイズを追加 (AlphaZeroの定石)
-            # 序盤の手数 (例: 30手未満) のみノイズを強くするなどの工夫も可能だが、
-            # ここでは常に一定のノイズを混ぜて多様な局面を経験させる
-            noise = np.random.dirichlet([0.3] * len(valid_moves))
-            pi_valid = 0.75 * pi_valid + 0.25 * noise
-            pi_valid /= pi_valid.sum()
-
-            action_idx = np.random.choice(len(valid_moves), p=pi_valid)
-            action = valid_moves[action_idx]
-
-            # features[batch_idx] は numpy のビューだが、base array への参照が
-            # histories に残るため、次のループで features が再代入されても安全
-            histories[game_idx].append((features[batch_idx], action, board.turn))
-
-            _, reward, done = board.step(action)
+            history.append((board.get_feature(), pi_target, board.turn))
+            _, reward, done = board.step(move)
 
             if done:
-                # board.turn はすでに反転している。
-                # reward < 0 なら、直前に打ったプレイヤー(board.turn * -1)が負け。
-                # つまり勝者は board.turn。
                 final_winner = board.turn if reward < 0 else 0
-                for feat, act, turn in histories[game_idx]:
-                    v = 1.0 if turn == final_winner else (-1.0 if final_winner != 0 else 0.0)
-                    pi_target = np.zeros(81, dtype=np.float32)
-                    pi_target[act] = 1.0
-                    dataset.append((feat, pi_target, np.float32(v)))
-            else:
-                next_active.append(game_idx)
-
-        active = next_active
+                for feat, pi, turn in history:
+                    z = 1.0 if turn == final_winner else (-1.0 if final_winner != 0 else 0.0)
+                    dataset.append((feat, pi.astype(np.float32), np.float32(z)))
+                break
 
     return dataset
 
 
 def train():
     print(f"Using Device: {DEVICE}")
-    net = SmallResNet().to(DEVICE)
+    net = ResNet().to(DEVICE)
 
     # torch.compile で推論・学習を JIT 高速化 (PyTorch 2.0+)
     if hasattr(torch, "compile"):
@@ -104,15 +88,16 @@ def train():
     scaler = torch.amp.GradScaler("cuda") if use_amp else None
 
     memory = deque(maxlen=MAX_MEMORY)
+    os.makedirs(SAVE_DIR, exist_ok=True)
 
     epoch = 0
     try:
         while True:
             epoch += 1
 
-            # 1. 自己対戦 (全ゲーム同時進行・バッチ推論)
-            print(f"Epoch {epoch}: Self-playing ({GAMES_PER_EPOCH} games, batched)...")
-            dataset = self_play_batch(net, GAMES_PER_EPOCH)
+            # 1. AlphaZero形式の自己対戦 (MCTS訪問回数分布を教師に利用)
+            print(f"Epoch {epoch}: Self-playing ({GAMES_PER_EPOCH} games, MCTS sims={MCTS_SIMULATIONS})...")
+            dataset = self_play_alpha_zero(net, GAMES_PER_EPOCH, MCTS_SIMULATIONS)
             memory.extend(dataset)
 
             # 2. 学習 (Update)
@@ -148,9 +133,8 @@ def train():
                     if use_amp:
                         with torch.amp.autocast("cuda"):
                             out_pi, out_v = net(feats)
-                            # Policy loss: 勝った手(vs > 0)のみを正解として学習する（負けた手を遠ざけるとLossが負の無限大に発散するため）
-                            win_mask = (vs > 0).float()
-                            loss_pi = -torch.sum(win_mask * pis * out_pi) / (win_mask.sum() + 1e-8)
+                            # AlphaZero policy loss: cross entropy with MCTS visit distribution pi.
+                            loss_pi = -torch.sum(pis * out_pi, dim=1).mean()
                             loss_v  = F.mse_loss(out_v, vs)
                             loss    = loss_pi + loss_v
                         scaler.scale(loss).backward()
@@ -158,8 +142,7 @@ def train():
                         scaler.update()
                     else:
                         out_pi, out_v = net(feats)
-                        win_mask = (vs > 0).float()
-                        loss_pi = -torch.sum(win_mask * pis * out_pi) / (win_mask.sum() + 1e-8)
+                        loss_pi = -torch.sum(pis * out_pi, dim=1).mean()
                         loss_v  = F.mse_loss(out_v, vs)
                         loss    = loss_pi + loss_v
                         loss.backward()

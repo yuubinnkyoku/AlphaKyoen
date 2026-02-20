@@ -144,13 +144,14 @@ def backpropagate(search_path, value):
         value = -value
 
 
-def mcts_search(
+def _run_mcts(
     root_board,
     policy_value_net,
     num_simulations=800,
     c_puct=1.5,
     dirichlet_alpha=0.3,
     dirichlet_eps=0.25,
+    add_root_noise=False,
 ):
     valid_root_moves = root_board.valid_moves()
     if len(valid_root_moves) == 0:
@@ -160,8 +161,8 @@ def mcts_search(
     root_policy, _ = policy_value_net.predict(root.board)
     expand_node(root, root_policy)
 
-    # Add Dirichlet noise at root for better exploration.
-    if root.children:
+    # Add Dirichlet noise at root for self-play exploration.
+    if add_root_noise and root.children:
         moves = list(root.children.keys())
         noise = np.random.dirichlet([dirichlet_alpha] * len(moves))
         for idx, move in enumerate(moves):
@@ -186,8 +187,74 @@ def mcts_search(
 
         backpropagate(search_path, value)
 
-    best_child = max(root.children.values(), key=lambda c: c.visit_count)
-    return best_child.move
+    return root
+
+
+def _visits_to_policy(root, temperature=1.0):
+    pi = np.zeros(81, dtype=np.float32)
+    if not root.children:
+        return pi
+
+    moves = np.array(list(root.children.keys()), dtype=np.int64)
+    visits = np.array([root.children[m].visit_count for m in moves], dtype=np.float32)
+
+    if temperature <= 1e-6:
+        best = int(np.argmax(visits))
+        probs = np.zeros_like(visits, dtype=np.float32)
+        probs[best] = 1.0
+    else:
+        inv_t = 1.0 / temperature
+        probs = np.power(visits, inv_t).astype(np.float32)
+        s = probs.sum()
+        if s > 0:
+            probs /= s
+        else:
+            probs = np.ones_like(probs, dtype=np.float32) / len(probs)
+
+    pi[moves] = probs
+    return pi
+
+
+def mcts_search_with_policy(
+    root_board,
+    policy_value_net,
+    num_simulations=800,
+    c_puct=1.5,
+    dirichlet_alpha=0.3,
+    dirichlet_eps=0.25,
+    add_root_noise=False,
+    temperature=1.0,
+):
+    root = _run_mcts(
+        root_board=root_board,
+        policy_value_net=policy_value_net,
+        num_simulations=num_simulations,
+        c_puct=c_puct,
+        dirichlet_alpha=dirichlet_alpha,
+        dirichlet_eps=dirichlet_eps,
+        add_root_noise=add_root_noise,
+    )
+
+    pi = _visits_to_policy(root, temperature=temperature)
+    move = int(np.random.choice(np.arange(81), p=pi))
+    return move, pi
+
+
+def mcts_search(
+    root_board,
+    policy_value_net,
+    num_simulations=800,
+    c_puct=1.5,
+):
+    move, _ = mcts_search_with_policy(
+        root_board=root_board,
+        policy_value_net=policy_value_net,
+        num_simulations=num_simulations,
+        c_puct=c_puct,
+        add_root_noise=False,
+        temperature=1e-8,
+    )
+    return move
 
 
 def draw_board(stdscr, board, cursor_r, cursor_c, message=""):
