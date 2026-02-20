@@ -3,6 +3,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 import os
+from collections import deque
 from game import Board
 from model import SmallResNet
 
@@ -10,8 +11,10 @@ from model import SmallResNet
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 GAMES_PER_EPOCH = 50  # 1回の学習のために自己対戦する回数
 BATCH_SIZE = 64
-LR = 0.001
+LR = 0.0002           # 学習率を少し下げて安定化
 SAVE_DIR = "models"
+MAX_MEMORY = 50000    # リプレイバッファの最大サイズ
+TRAIN_EPOCHS = 3      # 1回のデータ生成に対する学習エポック数
 
 
 def self_play_batch(net, n_games=GAMES_PER_EPOCH):
@@ -48,6 +51,13 @@ def self_play_batch(net, n_games=GAMES_PER_EPOCH):
                 pi_valid /= pi_sum
             else:
                 pi_valid = np.ones_like(pi_valid) / len(pi_valid)
+
+            # 探索を促進するためにディリクレノイズを追加 (AlphaZeroの定石)
+            # 序盤の手数 (例: 30手未満) のみノイズを強くするなどの工夫も可能だが、
+            # ここでは常に一定のノイズを混ぜて多様な局面を経験させる
+            noise = np.random.dirichlet([0.3] * len(valid_moves))
+            pi_valid = 0.75 * pi_valid + 0.25 * noise
+            pi_valid /= pi_valid.sum()
 
             action_idx = np.random.choice(len(valid_moves), p=pi_valid)
             action = valid_moves[action_idx]
@@ -90,6 +100,8 @@ def train():
     use_amp = DEVICE == "cuda"
     scaler = torch.amp.GradScaler("cuda") if use_amp else None
 
+    memory = deque(maxlen=MAX_MEMORY)
+
     epoch = 0
     try:
         while True:
@@ -98,56 +110,59 @@ def train():
             # 1. 自己対戦 (全ゲーム同時進行・バッチ推論)
             print(f"Epoch {epoch}: Self-playing ({GAMES_PER_EPOCH} games, batched)...")
             dataset = self_play_batch(net, GAMES_PER_EPOCH)
+            memory.extend(dataset)
 
             # 2. 学習 (Update)
-            print(f"Training on {len(dataset)} samples...")
+            print(f"Training on {len(memory)} samples in memory...")
             net.train()
 
             # 一括 NumPy 変換 → permutation シャッフル → テンソル化 (コピーなし)
-            feats_all = np.array([d[0] for d in dataset], dtype=np.float32)
-            pis_all   = np.array([d[1] for d in dataset], dtype=np.float32)
-            vs_all    = np.array([d[2] for d in dataset], dtype=np.float32)
+            memory_list = list(memory)
+            feats_all = np.array([d[0] for d in memory_list], dtype=np.float32)
+            pis_all   = np.array([d[1] for d in memory_list], dtype=np.float32)
+            vs_all    = np.array([d[2] for d in memory_list], dtype=np.float32)
 
-            perm = np.random.permutation(len(dataset))
-            feats_all = feats_all[perm]
-            pis_all   = pis_all[perm]
-            vs_all    = vs_all[perm]
+            for train_epoch in range(TRAIN_EPOCHS):
+                perm = np.random.permutation(len(memory_list))
+                feats_all_shuffled = feats_all[perm]
+                pis_all_shuffled   = pis_all[perm]
+                vs_all_shuffled    = vs_all[perm]
 
-            feats_t = torch.from_numpy(feats_all)
-            pis_t   = torch.from_numpy(pis_all)
-            vs_t    = torch.from_numpy(vs_all).unsqueeze(1)
+                feats_t = torch.from_numpy(feats_all_shuffled)
+                pis_t   = torch.from_numpy(pis_all_shuffled)
+                vs_t    = torch.from_numpy(vs_all_shuffled).unsqueeze(1)
 
-            total_loss = 0.0
-            n_batches  = 0
+                total_loss = 0.0
+                n_batches  = 0
 
-            for i in range(0, len(dataset), BATCH_SIZE):
-                feats = feats_t[i:i+BATCH_SIZE].to(DEVICE, non_blocking=True)
-                pis   = pis_t[i:i+BATCH_SIZE].to(DEVICE, non_blocking=True)
-                vs    = vs_t[i:i+BATCH_SIZE].to(DEVICE, non_blocking=True)
+                for i in range(0, len(memory_list), BATCH_SIZE):
+                    feats = feats_t[i:i+BATCH_SIZE].to(DEVICE, non_blocking=True)
+                    pis   = pis_t[i:i+BATCH_SIZE].to(DEVICE, non_blocking=True)
+                    vs    = vs_t[i:i+BATCH_SIZE].to(DEVICE, non_blocking=True)
 
-                optimizer.zero_grad(set_to_none=True)
+                    optimizer.zero_grad(set_to_none=True)
 
-                if use_amp:
-                    with torch.amp.autocast("cuda"):
+                    if use_amp:
+                        with torch.amp.autocast("cuda"):
+                            out_pi, out_v = net(feats)
+                            loss_pi = -torch.sum(vs * pis * out_pi) / feats.size(0)
+                            loss_v  = F.mse_loss(out_v, vs)
+                            loss    = loss_pi + loss_v
+                        scaler.scale(loss).backward()
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:
                         out_pi, out_v = net(feats)
-                        loss_pi = -torch.sum(pis * out_pi) / feats.size(0)
+                        loss_pi = -torch.sum(vs * pis * out_pi) / feats.size(0)
                         loss_v  = F.mse_loss(out_v, vs)
                         loss    = loss_pi + loss_v
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
-                else:
-                    out_pi, out_v = net(feats)
-                    loss_pi = -torch.sum(pis * out_pi) / feats.size(0)
-                    loss_v  = F.mse_loss(out_v, vs)
-                    loss    = loss_pi + loss_v
-                    loss.backward()
-                    optimizer.step()
+                        loss.backward()
+                        optimizer.step()
 
-                total_loss += loss.item()
-                n_batches  += 1
+                    total_loss += loss.item()
+                    n_batches  += 1
 
-            print(f"Loss: {total_loss / n_batches:.4f}")
+                print(f"  Train Epoch {train_epoch+1}/{TRAIN_EPOCHS} - Loss: {total_loss / n_batches:.4f}")
 
             # モデル保存 (torch.compile されている場合は _orig_mod を参照)
             if epoch % 10 == 0:
