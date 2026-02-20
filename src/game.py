@@ -51,10 +51,13 @@ class Board:
             
         self.move_count += 1
         
+        # 相手の石と自分の石を合わせた全体の盤面で共円を判定する
+        all_bb = self.bb_me | self.bb_opp
+        
         # --- 修正ポイント：明示的に numpy.uint64 に変換する ---
         # 0xFFFFFFFFFFFFFFFF は 64bitの最大値
-        bb_lo = np.uint64(current_bb & 0xFFFFFFFFFFFFFFFF)
-        bb_hi = np.uint64(current_bb >> 64)
+        bb_lo = np.uint64(all_bb & 0xFFFFFFFFFFFFFFFF)
+        bb_hi = np.uint64(all_bb >> 64)
         
         # actionも明示的にintにキャストして渡す
         is_win = check_winner_numba(bb_lo, bb_hi, action, PATTERNS_TABLE)
