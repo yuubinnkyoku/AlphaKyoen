@@ -1,168 +1,251 @@
+import curses
 import math
+import os
 import random
 import time
-import curses
+
 import numpy as np
+import torch
+
 from game import Board
+from model import ResNet
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def find_latest_model_path(save_dir="models"):
+    if not os.path.isdir(save_dir):
+        return None
+
+    epoch_models = []
+    for filename in os.listdir(save_dir):
+        if not filename.startswith("model_epoch_") or not filename.endswith(".pth"):
+            continue
+        try:
+            epoch = int(filename[len("model_epoch_") : -len(".pth")])
+            epoch_models.append((epoch, os.path.join(save_dir, filename)))
+        except ValueError:
+            continue
+
+    if epoch_models:
+        epoch_models.sort(key=lambda x: x[0])
+        return epoch_models[-1][1]
+
+    interrupted = os.path.join(save_dir, "model_interrupted.pth")
+    if os.path.exists(interrupted):
+        return interrupted
+
+    return None
+
+
+class PolicyValueNet:
+    def __init__(self, model_path=None, device=DEVICE):
+        self.device = device
+        self.net = ResNet().to(self.device)
+
+        if model_path is None:
+            model_path = find_latest_model_path()
+
+        if model_path is not None and os.path.exists(model_path):
+            state_dict = torch.load(model_path, map_location=self.device)
+            self.net.load_state_dict(state_dict, strict=False)
+            print(f"Loaded model: {model_path}")
+        else:
+            print("No checkpoint found. Using randomly initialized ResNet.")
+
+        self.net.eval()
+
+    @torch.no_grad()
+    def predict(self, board):
+        x = torch.from_numpy(board.get_feature()).unsqueeze(0).to(self.device)
+        log_pi, value = self.net(x)
+        policy = torch.exp(log_pi)[0].cpu().numpy()
+        return policy, float(value.item())
+
 
 class MCTSNode:
-    def __init__(self, board, parent=None, move=None, done=False, winner=0):
+    def __init__(self, board, parent=None, move=None, prior=0.0, done=False, winner=0):
         self.board = board
         self.parent = parent
         self.move = move
-        self.children = []
-        self.wins = 0.0
-        self.visits = 0
+        self.prior = prior
         self.done = done
         self.winner = winner
-        
-        if self.done:
-            self.untried_moves = []
-        else:
-            self.untried_moves = list(board.valid_moves())
-            
-    def uct_select_child(self, c_puct=1.414):
-        best_score = -float('inf')
+
+        self.value_sum = 0.0
+        self.visit_count = 0
+        self.children = {}
+
+    def value(self):
+        if self.visit_count == 0:
+            return 0.0
+        return self.value_sum / self.visit_count
+
+    def select_child(self, c_puct=1.5):
+        best_score = -float("inf")
         best_child = None
-        for child in self.children:
-            if child.visits == 0:
-                return child
-            exploit = child.wins / child.visits
-            explore = math.sqrt(math.log(self.visits) / child.visits)
-            score = exploit + c_puct * explore
+
+        sqrt_parent_visits = math.sqrt(self.visit_count + 1)
+        for child in self.children.values():
+            # child.value() is from child.board.turn perspective, so invert for parent perspective.
+            q = -child.value()
+            u = c_puct * child.prior * sqrt_parent_visits / (1 + child.visit_count)
+            score = q + u
+
             if score > best_score:
                 best_score = score
                 best_child = child
+
         return best_child
 
-    def update(self, result):
-        self.visits += 1
-        self.wins += result
 
-def playout(board):
-    current_board = board.copy()
-    
-    while True:
-        valid_moves = current_board.valid_moves()
-        if len(valid_moves) == 0:
-            return 0 # Draw
-            
-        move = random.choice(valid_moves)
-        turn_current = current_board.turn
-        _, reward, done = current_board.step(move)
-        
-        if done:
-            if reward < 0:
-                return -turn_current
-            else:
-                return 0
+def terminal_value(node):
+    if node.winner == 0:
+        return 0.0
+    return 1.0 if node.winner == node.board.turn else -1.0
 
-def mcts_search(root_board, num_simulations=1000):
-    root = MCTSNode(root_board)
-    
+
+def expand_node(node, policy):
+    valid_moves = node.board.valid_moves()
+    if len(valid_moves) == 0:
+        return
+
+    priors = policy[valid_moves]
+    prior_sum = np.sum(priors)
+    if prior_sum > 0:
+        priors = priors / prior_sum
+    else:
+        priors = np.ones_like(priors, dtype=np.float32) / len(priors)
+
+    for move, prior in zip(valid_moves, priors):
+        next_board = node.board.copy()
+        _, reward, done = next_board.step(move)
+
+        if done and reward < 0:
+            winner = next_board.turn
+        else:
+            winner = 0
+
+        child = MCTSNode(
+            board=next_board,
+            parent=node,
+            move=int(move),
+            prior=float(prior),
+            done=done,
+            winner=winner,
+        )
+        node.children[int(move)] = child
+
+
+def backpropagate(search_path, value):
+    for node in reversed(search_path):
+        node.visit_count += 1
+        node.value_sum += value
+        value = -value
+
+
+def mcts_search(
+    root_board,
+    policy_value_net,
+    num_simulations=800,
+    c_puct=1.5,
+    dirichlet_alpha=0.3,
+    dirichlet_eps=0.25,
+):
+    valid_root_moves = root_board.valid_moves()
+    if len(valid_root_moves) == 0:
+        raise ValueError("No valid moves available for MCTS search.")
+
+    root = MCTSNode(root_board.copy())
+    root_policy, _ = policy_value_net.predict(root.board)
+    expand_node(root, root_policy)
+
+    # Add Dirichlet noise at root for better exploration.
+    if root.children:
+        moves = list(root.children.keys())
+        noise = np.random.dirichlet([dirichlet_alpha] * len(moves))
+        for idx, move in enumerate(moves):
+            child = root.children[move]
+            child.prior = (1.0 - dirichlet_eps) * child.prior + dirichlet_eps * float(noise[idx])
+
     for _ in range(num_simulations):
         node = root
-        
-        # 1. Selection
-        while not node.done and len(node.untried_moves) == 0 and len(node.children) > 0:
-            node = node.uct_select_child()
-            
-        # 2. Expansion
-        if not node.done and len(node.untried_moves) > 0:
-            move = random.choice(node.untried_moves)
-            node.untried_moves.remove(move)
-            
-            next_board = node.board.copy()
-            turn_played = next_board.turn
-            _, reward, done = next_board.step(move)
-            
-            winner = -turn_played if (done and reward < 0) else 0
-            
-            child_node = MCTSNode(next_board, parent=node, move=move, done=done, winner=winner)
-            node.children.append(child_node)
-            node = child_node
-            
-            if done:
-                sim_winner = winner
-            else:
-                sim_winner = playout(next_board)
+        search_path = [node]
+
+        while node.children:
+            node = node.select_child(c_puct=c_puct)
+            search_path.append(node)
+            if node.done:
+                break
+
+        if node.done:
+            value = terminal_value(node)
         else:
-            sim_winner = node.winner
-            
-        # 3. Backpropagation
-        current = node
-        while current is not None:
-            if current.parent is not None:
-                turn_played = current.parent.board.turn
-                if sim_winner == turn_played:
-                    result = 1.0
-                elif sim_winner == -turn_played:
-                    result = 0.0
-                else:
-                    result = 0.5
-            else:
-                result = 0.5
-                
-            current.update(result)
-            current = current.parent
-            
-    if not root.children:
-        return random.choice(root_board.valid_moves())
-        
-    best_child = max(root.children, key=lambda c: c.visits)
+            policy, value = policy_value_net.predict(node.board)
+            expand_node(node, policy)
+
+        backpropagate(search_path, value)
+
+    best_child = max(root.children.values(), key=lambda c: c.visit_count)
     return best_child.move
+
 
 def draw_board(stdscr, board, cursor_r, cursor_c, message=""):
     stdscr.clear()
-    stdscr.addstr(0, 0, "=== AlphaKyoen MCTS ===")
-    
-    symbols = {1: 'O', -1: 'X', 0: '.'}
-    
-    # 盤面の描画
+    stdscr.addstr(0, 0, "=== AlphaKyoen AlphaZero MCTS ===")
+
+    symbols = {1: "O", -1: "X", 0: "."}
+
     for r in range(9):
         for c in range(9):
             idx = r * 9 + c
             sym = symbols[board.board[idx]]
-            
-            # カーソル位置はハイライト
+
             if r == cursor_r and c == cursor_c:
                 stdscr.addstr(r + 2, c * 2 + 2, sym, curses.A_REVERSE)
             else:
                 stdscr.addstr(r + 2, c * 2 + 2, sym)
-                
+
     stdscr.addstr(12, 0, message)
     stdscr.refresh()
 
+
 def play_game_curses(stdscr):
-    curses.curs_set(0) # カーソルを隠す
+    curses.curs_set(0)
     stdscr.clear()
-    
-    stdscr.addstr(0, 0, "=== AlphaKyoen MCTS ===")
+
+    stdscr.addstr(0, 0, "=== AlphaKyoen AlphaZero MCTS ===")
     stdscr.addstr(2, 0, "Do you want to play first? (y/n): ")
     stdscr.refresh()
-    
+
     while True:
         key = stdscr.getch()
-        if key in [ord('y'), ord('Y')]:
+        if key in [ord("y"), ord("Y")]:
             player_turn = 1
             break
-        elif key in [ord('n'), ord('N')]:
+        if key in [ord("n"), ord("N")]:
             player_turn = -1
             break
-            
-    player_symbol = 'O' if player_turn == 1 else 'X'
-    ai_symbol = 'X' if player_turn == 1 else 'O'
-    
+
+    player_symbol = "O" if player_turn == 1 else "X"
+    ai_symbol = "X" if player_turn == 1 else "O"
+
     board = Board()
     cursor_r, cursor_c = 4, 4
-    
+    policy_value_net = PolicyValueNet()
+
     while True:
         if board.turn == player_turn:
-            # Player's turn
             while True:
-                draw_board(stdscr, board, cursor_r, cursor_c, f"Your turn ({player_symbol}). Use Arrow keys to move, Enter to place.")
+                draw_board(
+                    stdscr,
+                    board,
+                    cursor_r,
+                    cursor_c,
+                    f"Your turn ({player_symbol}). Use Arrow keys to move, Enter to place.",
+                )
                 key = stdscr.getch()
-                
+
                 if key == curses.KEY_UP and cursor_r > 0:
                     cursor_r -= 1
                 elif key == curses.KEY_DOWN and cursor_r < 8:
@@ -175,10 +258,9 @@ def play_game_curses(stdscr):
                     move = cursor_r * 9 + cursor_c
                     if move in board.valid_moves():
                         break
-                    else:
-                        draw_board(stdscr, board, cursor_r, cursor_c, "Invalid move! Press any key...")
-                        stdscr.getch()
-                        
+                    draw_board(stdscr, board, cursor_r, cursor_c, "Invalid move! Press any key...")
+                    stdscr.getch()
+
             _, reward, done = board.step(move)
             if done:
                 msg = "You lose! Press any key to exit." if reward < 0 else "Draw! Press any key to exit."
@@ -186,36 +268,41 @@ def play_game_curses(stdscr):
                 stdscr.getch()
                 break
         else:
-            # AI's turn
             draw_board(stdscr, board, -1, -1, f"AI ({ai_symbol}) is thinking...")
             start_time = time.time()
-            move = mcts_search(board, num_simulations=3000)
+            move = mcts_search(board, policy_value_net, num_simulations=1200)
             elapsed = time.time() - start_time
-            
+
             _, reward, done = board.step(move)
             if done:
-                msg = f"AI played {move//9} {move%9} ({elapsed:.2f}s). AI loses! Press any key to exit." if reward < 0 else "Draw! Press any key to exit."
+                if reward < 0:
+                    msg = f"AI played {move // 9} {move % 9} ({elapsed:.2f}s). AI loses! Press any key to exit."
+                else:
+                    msg = "Draw! Press any key to exit."
                 draw_board(stdscr, board, -1, -1, msg)
                 stdscr.getch()
                 break
 
-def ai_vs_random(num_games=10, mcts_simulations=1000):
+
+def ai_vs_random(num_games=10, mcts_simulations=800):
+    policy_value_net = PolicyValueNet()
+
     mcts_wins = 0
     random_wins = 0
     draws = 0
-    
+
     for i in range(num_games):
         board = Board()
         mcts_turn = 1 if i % 2 == 0 else -1
-        
+
         while True:
             if board.turn == mcts_turn:
-                move = mcts_search(board, num_simulations=mcts_simulations)
+                move = mcts_search(board, policy_value_net, num_simulations=mcts_simulations)
             else:
                 move = random.choice(board.valid_moves())
-                
+
             _, reward, done = board.step(move)
-            
+
             if done:
                 if reward < 0:
                     if board.turn * -1 == mcts_turn:
@@ -225,12 +312,14 @@ def ai_vs_random(num_games=10, mcts_simulations=1000):
                 else:
                     draws += 1
                 break
-                
-    print(f"MCTS vs Random: MCTS {mcts_wins} - {random_wins} Random (Draws: {draws})")
+
+    print(f"NN-MCTS vs Random: NN-MCTS {mcts_wins} - {random_wins} Random (Draws: {draws})")
+
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1 and sys.argv[1] == "test":
-        ai_vs_random(10, 1000)
+        ai_vs_random(10, 800)
     else:
         curses.wrapper(play_game_curses)

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class SmallResNet(nn.Module):
+class ResNet(nn.Module):
     def __init__(self, num_blocks=4, filters=64):
         super().__init__()
         
@@ -43,6 +43,13 @@ class SmallResNet(nn.Module):
         v = torch.tanh(self.value_fc2(v))
         
         return p, v
+
+
+class SmallResNet(ResNet):
+    """Backward-compatible alias for existing training scripts."""
+
+    def __init__(self, num_blocks=4, filters=64):
+        super().__init__(num_blocks=num_blocks, filters=filters)
 
 class ResBlock(nn.Module):
     def __init__(self, filters):
