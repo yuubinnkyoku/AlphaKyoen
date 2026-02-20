@@ -145,7 +145,9 @@ def train():
                     if use_amp:
                         with torch.amp.autocast("cuda"):
                             out_pi, out_v = net(feats)
-                            loss_pi = -torch.sum(vs * pis * out_pi) / feats.size(0)
+                            # Policy loss: 勝った手(vs > 0)のみを正解として学習する（負けた手を遠ざけるとLossが負の無限大に発散するため）
+                            win_mask = (vs > 0).float()
+                            loss_pi = -torch.sum(win_mask * pis * out_pi) / (win_mask.sum() + 1e-8)
                             loss_v  = F.mse_loss(out_v, vs)
                             loss    = loss_pi + loss_v
                         scaler.scale(loss).backward()
@@ -153,7 +155,8 @@ def train():
                         scaler.update()
                     else:
                         out_pi, out_v = net(feats)
-                        loss_pi = -torch.sum(vs * pis * out_pi) / feats.size(0)
+                        win_mask = (vs > 0).float()
+                        loss_pi = -torch.sum(win_mask * pis * out_pi) / (win_mask.sum() + 1e-8)
                         loss_v  = F.mse_loss(out_v, vs)
                         loss    = loss_pi + loss_v
                         loss.backward()
