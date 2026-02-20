@@ -61,7 +61,7 @@ class Board:
         # --------------------------------------------------
         
         done = is_win or (self.move_count >= N_POINTS)
-        reward = 1.0 if is_win else 0.0
+        reward = -1.0 if is_win else 0.0
         
         self.turn *= -1
         return self.board, reward, done

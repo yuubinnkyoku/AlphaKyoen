@@ -52,8 +52,8 @@ def playout(board):
         _, reward, done = current_board.step(move)
         
         if done:
-            if reward > 0:
-                return turn_current
+            if reward < 0:
+                return -turn_current
             else:
                 return 0
 
@@ -76,7 +76,7 @@ def mcts_search(root_board, num_simulations=1000):
             turn_played = next_board.turn
             _, reward, done = next_board.step(move)
             
-            winner = turn_played if (done and reward > 0) else 0
+            winner = -turn_played if (done and reward < 0) else 0
             
             child_node = MCTSNode(next_board, parent=node, move=move, done=done, winner=winner)
             node.children.append(child_node)
@@ -181,7 +181,7 @@ def play_game_curses(stdscr):
                         
             _, reward, done = board.step(move)
             if done:
-                msg = "You win! Press any key to exit." if reward > 0 else "Draw! Press any key to exit."
+                msg = "You lose! Press any key to exit." if reward < 0 else "Draw! Press any key to exit."
                 draw_board(stdscr, board, -1, -1, msg)
                 stdscr.getch()
                 break
@@ -194,7 +194,7 @@ def play_game_curses(stdscr):
             
             _, reward, done = board.step(move)
             if done:
-                msg = f"AI played {move//9} {move%9} ({elapsed:.2f}s). AI wins! Press any key to exit." if reward > 0 else "Draw! Press any key to exit."
+                msg = f"AI played {move//9} {move%9} ({elapsed:.2f}s). AI loses! Press any key to exit." if reward < 0 else "Draw! Press any key to exit."
                 draw_board(stdscr, board, -1, -1, msg)
                 stdscr.getch()
                 break
@@ -217,11 +217,11 @@ def ai_vs_random(num_games=10, mcts_simulations=1000):
             _, reward, done = board.step(move)
             
             if done:
-                if reward > 0:
+                if reward < 0:
                     if board.turn * -1 == mcts_turn:
-                        mcts_wins += 1
-                    else:
                         random_wins += 1
+                    else:
+                        mcts_wins += 1
                 else:
                     draws += 1
                 break

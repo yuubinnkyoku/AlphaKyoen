@@ -69,7 +69,10 @@ def self_play_batch(net, n_games=GAMES_PER_EPOCH):
             _, reward, done = board.step(action)
 
             if done:
-                final_winner = board.turn * -1 if reward > 0 else 0
+                # board.turn はすでに反転している。
+                # reward < 0 なら、直前に打ったプレイヤー(board.turn * -1)が負け。
+                # つまり勝者は board.turn。
+                final_winner = board.turn if reward < 0 else 0
                 for feat, act, turn in histories[game_idx]:
                     v = 1.0 if turn == final_winner else (-1.0 if final_winner != 0 else 0.0)
                     pi_target = np.zeros(81, dtype=np.float32)
