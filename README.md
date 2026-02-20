@@ -19,6 +19,10 @@
 ## 学習
 
 ```cmd
+uv sync
+```
+
+```cmd
 uv run src/main.py
 ```
 
