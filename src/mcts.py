@@ -5,13 +5,12 @@ import random
 import time
 
 import numpy as np
-import torch
+import jax
+import jax.numpy as jnp
+import flax
 
 from game import Board
 from model import ResNet
-
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
 
 def find_latest_model_path(save_dir="models"):
     if not os.path.isdir(save_dir):
@@ -19,10 +18,10 @@ def find_latest_model_path(save_dir="models"):
 
     epoch_models = []
     for filename in os.listdir(save_dir):
-        if not filename.startswith("model_epoch_") or not filename.endswith(".pth"):
+        if not filename.startswith("model_epoch_") or not filename.endswith(".msgpack"):
             continue
         try:
-            epoch = int(filename[len("model_epoch_") : -len(".pth")])
+            epoch = int(filename[len("model_epoch_") : -len(".msgpack")])
             epoch_models.append((epoch, os.path.join(save_dir, filename)))
         except ValueError:
             continue
@@ -31,37 +30,43 @@ def find_latest_model_path(save_dir="models"):
         epoch_models.sort(key=lambda x: x[0])
         return epoch_models[-1][1]
 
-    interrupted = os.path.join(save_dir, "model_interrupted.pth")
+    interrupted = os.path.join(save_dir, "model_interrupted.msgpack")
     if os.path.exists(interrupted):
         return interrupted
 
     return None
 
+@jax.jit
+def predict_step(params, batch_stats, x):
+    variables = {'params': params, 'batch_stats': batch_stats}
+    log_pi, value = ResNet().apply(variables, x, train=False)
+    return log_pi, value
 
 class PolicyValueNet:
-    def __init__(self, model_path=None, device=DEVICE):
-        self.device = device
-        self.net = ResNet().to(self.device)
+    def __init__(self, model_path=None):
+        self.net = ResNet()
+        dummy_x = jnp.zeros((1, 3, 9, 9), dtype=jnp.float32)
+        variables = self.net.init(jax.random.PRNGKey(0), dummy_x, train=False)
+        self.params = variables['params']
+        self.batch_stats = variables['batch_stats']
 
         if model_path is None:
             model_path = find_latest_model_path()
 
         if model_path is not None and os.path.exists(model_path):
-            state_dict = torch.load(model_path, map_location=self.device)
-            self.net.load_state_dict(state_dict, strict=False)
+            with open(model_path, "rb") as f:
+                loaded_vars = flax.serialization.from_bytes(variables, f.read())
+                self.params = loaded_vars['params']
+                self.batch_stats = loaded_vars['batch_stats']
             print(f"Loaded model: {model_path}")
         else:
             print("No checkpoint found. Using randomly initialized ResNet.")
 
-        self.net.eval()
-
-    @torch.no_grad()
     def predict(self, board):
-        x = torch.from_numpy(board.get_feature()).unsqueeze(0).to(self.device)
-        log_pi, value = self.net(x)
-        policy = torch.exp(log_pi)[0].cpu().numpy()
-        return policy, float(value.item())
-
+        x = jnp.array(board.get_feature()).reshape(1, 3, 9, 9)
+        log_pi, value = predict_step(self.params, self.batch_stats, x)
+        policy = jnp.exp(log_pi)[0]
+        return np.array(policy), float(value[0, 0])
 
 class MCTSNode:
     def __init__(self, board, parent=None, move=None, prior=0.0, done=False, winner=0):
@@ -98,12 +103,10 @@ class MCTSNode:
 
         return best_child
 
-
 def terminal_value(node):
     if node.winner == 0:
         return 0.0
     return 1.0 if node.winner == node.board.turn else -1.0
-
 
 def expand_node(node, policy):
     valid_moves = node.board.valid_moves()
@@ -136,13 +139,11 @@ def expand_node(node, policy):
         )
         node.children[int(move)] = child
 
-
 def backpropagate(search_path, value):
     for node in reversed(search_path):
         node.visit_count += 1
         node.value_sum += value
         value = -value
-
 
 def _run_mcts(
     root_board,
@@ -189,7 +190,6 @@ def _run_mcts(
 
     return root
 
-
 def _visits_to_policy(root, temperature=1.0):
     pi = np.zeros(81, dtype=np.float32)
     if not root.children:
@@ -213,7 +213,6 @@ def _visits_to_policy(root, temperature=1.0):
 
     pi[moves] = probs
     return pi
-
 
 def mcts_search_with_policy(
     root_board,
@@ -239,7 +238,6 @@ def mcts_search_with_policy(
     move = int(np.random.choice(np.arange(81), p=pi))
     return move, pi
 
-
 def mcts_search(
     root_board,
     policy_value_net,
@@ -255,7 +253,6 @@ def mcts_search(
         temperature=1e-8,
     )
     return move
-
 
 def draw_board(stdscr, board, cursor_r, cursor_c, message=""):
     stdscr.clear()
@@ -275,7 +272,6 @@ def draw_board(stdscr, board, cursor_r, cursor_c, message=""):
 
     stdscr.addstr(12, 0, message)
     stdscr.refresh()
-
 
 def play_game_curses(stdscr):
     curses.curs_set(0)
@@ -350,7 +346,6 @@ def play_game_curses(stdscr):
                 stdscr.getch()
                 break
 
-
 def ai_vs_random(num_games=10, mcts_simulations=800):
     policy_value_net = PolicyValueNet()
 
@@ -381,7 +376,6 @@ def ai_vs_random(num_games=10, mcts_simulations=800):
                 break
 
     print(f"NN-MCTS vs Random: NN-MCTS {mcts_wins} - {random_wins} Random (Draws: {draws})")
-
 
 if __name__ == "__main__":
     import sys
