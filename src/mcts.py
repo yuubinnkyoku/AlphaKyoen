@@ -63,10 +63,10 @@ class PolicyValueNet:
             print("No checkpoint found. Using randomly initialized ResNet.")
 
     def predict(self, board):
-        x = jnp.array(board.get_feature()).reshape(1, 3, 9, 9)
+        x = np.array(board.get_feature()).reshape(1, 3, 9, 9)
         log_pi, value = predict_step(self.params, self.batch_stats, x)
-        policy = jnp.exp(log_pi)[0]
-        return np.array(policy), float(value[0, 0])
+        policy = np.array(jnp.exp(log_pi)[0])
+        return policy, float(value[0, 0])
 
 class MCTSNode:
     def __init__(self, board, parent=None, move=None, prior=0.0, done=False, winner=0):
