@@ -32,7 +32,7 @@ class Board:
     def valid_moves(self):
         return np.where(self.board == 0)[0]
 
-    def step(self, action):
+    def step(self, action, return_details=False):
         # actionがnumpy.int64などの場合があるので、標準のintに変換
         action = int(action)
         
@@ -60,14 +60,37 @@ class Board:
         bb_hi = np.uint64(all_bb >> 64)
         
         # actionも明示的にintにキャストして渡す
-        is_win = check_winner_numba(bb_lo, bb_hi, action, PATTERNS_TABLE)
+        is_win, pat_lo, pat_hi = check_winner_with_pattern_numba(bb_lo, bb_hi, action, PATTERNS_TABLE)
         # --------------------------------------------------
         
         done = is_win or (self.move_count >= N_POINTS)
         reward = -1.0 if is_win else 0.0
+        kyoen_points = _pattern_to_indices(int(pat_lo), int(pat_hi)) if is_win else []
         
         self.turn *= -1
+        if return_details:
+            return self.board, reward, done, {"kyoen_points": kyoen_points}
         return self.board, reward, done
+
+    def would_form_kyoen(self, action):
+        action = int(action)
+        if self.board[action] != 0:
+            return []
+
+        all_bb = self.bb_me | self.bb_opp | (1 << action)
+        bb_lo = np.uint64(all_bb & 0xFFFFFFFFFFFFFFFF)
+        bb_hi = np.uint64(all_bb >> 64)
+        is_win, pat_lo, pat_hi = check_winner_with_pattern_numba(bb_lo, bb_hi, action, PATTERNS_TABLE)
+        if not is_win:
+            return []
+        return _pattern_to_indices(int(pat_lo), int(pat_hi))
+
+    def get_hint_moves(self):
+        hints = []
+        for action in self.valid_moves():
+            if self.would_form_kyoen(action):
+                hints.append(int(action))
+        return hints
 
     def get_feature(self):
         feat = np.zeros((3, 9, 9), dtype=np.float32)
@@ -80,6 +103,11 @@ class Board:
 
 @njit(fastmath=True)
 def check_winner_numba(bb_lo, bb_hi, last_move, patterns_table):
+    is_win, _, _ = check_winner_with_pattern_numba(bb_lo, bb_hi, last_move, patterns_table)
+    return is_win
+
+@njit(fastmath=True)
+def check_winner_with_pattern_numba(bb_lo, bb_hi, last_move, patterns_table):
     # last_moveに対応するパターン群を取り出す
     relevant_patterns = patterns_table[last_move]
     
@@ -94,6 +122,16 @@ def check_winner_numba(bb_lo, bb_hi, last_move, patterns_table):
         # ビット演算でチェック
         if (bb_lo & pat_lo) == pat_lo:
             if (bb_hi & pat_hi) == pat_hi:
-                return True
+                return True, pat_lo, pat_hi
             
-    return False
+    return False, np.uint64(0), np.uint64(0)
+
+def _pattern_to_indices(pat_lo, pat_hi):
+    indices = []
+    for i in range(64):
+        if (pat_lo >> i) & 1:
+            indices.append(i)
+    for i in range(17):
+        if (pat_hi >> i) & 1:
+            indices.append(64 + i)
+    return indices

@@ -28,3 +28,45 @@ uv sync
 uv run src/main.py
 ```
 
+## Web UI (React + FastAPI)
+
+以下を実装済みです。
+
+- GitHub Pages 配信の React フロントエンド
+- Hugging Face Spaces 配信の FastAPI バックエンド
+- 機能: 9x9 AI対戦、Size UI (9x9固定)、Resultボタン、Hintボタン
+
+### 1) FastAPI バックエンド起動
+
+```bash
+uv run uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+API:
+
+- `POST /api/move` : 人間の手を適用
+- `POST /api/ai_move` : AIの手を計算して適用
+- `POST /api/hint` : 次に置くと共円になる手(黄色表示用)
+- `GET /api/health` : ヘルスチェック
+
+### 2) React フロントエンド起動
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+環境変数例は `frontend/.env.example` を参照。
+
+### 3) GitHub Pages
+
+- ワークフロー: `.github/workflows/deploy-pages.yml`
+- `master` ブランチ push で `frontend/dist` を Pages にデプロイ
+- `VITE_API_BASE_URL` は GitHub Repository Variables で設定
+
+### 4) Hugging Face Spaces
+
+- ルートの `Dockerfile` を使用して FastAPI を 7860 番ポートで起動
+- Space 側でこのリポジトリを参照してデプロイ可能
+
