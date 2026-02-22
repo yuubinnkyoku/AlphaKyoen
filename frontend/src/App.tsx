@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { TFunction } from "i18next";
 import { aiMove, getHints, playerMove } from "./api";
 import type { GameState, MoveResponse, Turn } from "./types";
 
@@ -17,18 +19,21 @@ function idxToLabel(idx: number): string {
   return `${row},${col}`;
 }
 
-function getStatusText(resp: MoveResponse | null, currentTurn: Turn, humanSide: Turn, isAiThinking: boolean): string {
-  if (isAiThinking) return "AI thinking...";
-  if (!resp) return currentTurn === humanSide ? "Your turn" : "AI turn";
-  if (!resp.done) return currentTurn === humanSide ? "Your turn" : "AI turn";
+function getStatusText(
+  t: TFunction,
+  resp: MoveResponse | null,
+  currentTurn: Turn,
+  humanSide: Turn,
+  isAiThinking: boolean
+): string {
+  if (isAiThinking) return t("thinking");
+  if (!resp || !resp.done) return currentTurn === humanSide ? t("yourTurn") : t("aiTurn");
 
-  const loser = resp.turn * -1;
-  const loserText = loser === humanSide ? "You" : "AI";
-  const winnerText = loser === humanSide ? "AI" : "You";
-  return `${loserText} created Kyoen. ${winnerText} win.`;
+  return resp.turn === humanSide ? t("winYou") : t("winAi");
 }
 
 export default function App() {
+  const { t, i18n } = useTranslation();
   const [state, setState] = useState<GameState>(emptyState);
   const [humanSide, setHumanSide] = useState<Turn>(1);
   const [isAiThinking, setIsAiThinking] = useState(false);
@@ -41,6 +46,10 @@ export default function App() {
 
   const hintSet = useMemo(() => new Set(hintMoves), [hintMoves]);
   const resultSet = useMemo(() => new Set(lastResult?.kyoen_points ?? []), [lastResult]);
+
+  const changeLanguage = (lng: string) => {
+    void i18n.changeLanguage(lng);
+  };
 
   async function refreshHints(nextState: GameState, enabled = showHints, gameDone = done): Promise<void> {
     if (!enabled || gameDone) {
@@ -102,7 +111,7 @@ export default function App() {
       await refreshHints(nextState, showHints, false);
       await runAiTurn(nextState);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unexpected error");
+      setError(e instanceof Error ? e.message : t("unexpectedError"));
     }
   }
 
@@ -113,7 +122,7 @@ export default function App() {
       try {
         await refreshHints(state, true);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to fetch hints");
+        setError(e instanceof Error ? e.message : t("failedFetchHints"));
       }
     } else {
       setHintMoves([]);
@@ -134,39 +143,53 @@ export default function App() {
     <div className="page">
       <main className="shell">
         <header className="hero">
-          <p className="eyebrow">AlphaKyoen</p>
-          <h1>AI vs You</h1>
-          <p className="sub">Place stones without creating any 4-point concyclic pattern.</p>
+          <div className="lang-switcher">
+            <button
+              className={i18n.language === "en" ? "active" : ""}
+              onClick={() => changeLanguage("en")}
+            >
+              EN
+            </button>
+            <button
+              className={i18n.language === "ja" ? "active" : ""}
+              onClick={() => changeLanguage("ja")}
+            >
+              JA
+            </button>
+          </div>
+          <p className="eyebrow">{t("subtitle")}</p>
+          <h1>{t("title")}</h1>
+          <p className="sub">{t("instruction")}</p>
         </header>
 
         <section className="panel">
           <div className="controls">
-            <label htmlFor="size-select">Size</label>
+            <label htmlFor="size-select">{t("size")}</label>
             <select id="size-select" value="9x9" onChange={() => undefined}>
-              <option value="9x9">9x9 (AI only)</option>
+              <option value="9x9">{t("sizeAiOnly")}</option>
             </select>
 
-            <label htmlFor="order-select">Order</label>
+            <label htmlFor="order-select">{t("order")}</label>
             <select id="order-select" value={humanSide === 1 ? "first" : "second"} onChange={(e) => void onOrderChange(e.target.value)}>
-              <option value="first">You first</option>
-              <option value="second">You second</option>
+              <option value="first">{t("youFirst")}</option>
+              <option value="second">{t("youSecond")}</option>
             </select>
 
             <button type="button" onClick={() => setShowResult((v) => !v)} disabled={!lastResult?.kyoen_points?.length}>
-              Result
+              {t("result")}
             </button>
 
             <button type="button" onClick={onToggleHints} disabled={done || isAiThinking}>
-              {showHints ? "Hint Off" : "Hint"}
+              {showHints ? t("hintOff") : t("hint")}
             </button>
 
-            <button type="button" onClick={() => void onReset()}>Reset</button>
+            <button type="button" onClick={() => void onReset()}>{t("reset")}</button>
           </div>
 
-          <div className="status">{getStatusText(lastResult, state.turn, humanSide, isAiThinking)}</div>
+          <div className="status">{getStatusText(t, lastResult, state.turn, humanSide, isAiThinking)}</div>
           {showResult && lastResult?.kyoen_points?.length ? (
             <div className="result-text">
-              Kyoen points: {lastResult.kyoen_points.map((i) => idxToLabel(i)).join(" | ")}
+              {t("kyoenPoints")}: {lastResult.kyoen_points.map((i) => idxToLabel(i)).join(" | ")}
             </div>
           ) : null}
           {error ? <div className="error">{error}</div> : null}
