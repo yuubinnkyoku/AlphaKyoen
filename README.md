@@ -65,8 +65,37 @@ npm run dev
 - `master` ブランチ push で `frontend/dist` を Pages にデプロイ
 - `VITE_API_BASE_URL` は GitHub Repository Variables で設定
 
+Repository Variables 例:
+
+- `VITE_API_BASE_URL=https://<your-space-name>.hf.space`
+
 ### 4) Hugging Face Spaces
 
 - ルートの `Dockerfile` を使用して FastAPI を 7860 番ポートで起動
 - Space 側でこのリポジトリを参照してデプロイ可能
+
+推奨設定:
+
+- Space SDK: `Docker`
+- リポジトリ: このリポジトリを接続
+- 公開URL: `https://<your-space-name>.hf.space`
+
+### 5) API スモークテスト (uv)
+
+```bash
+uv run python scripts/smoke_api.py
+```
+
+AI の一手まで確認する場合:
+
+```bash
+uv run python scripts/smoke_api.py --with-ai
+```
+
+確認内容:
+
+- `health` が `{"ok": true}` を返す
+- `hint` が配列で返る
+- 人間の手 (`/api/move`) が進行できる
+- `--with-ai` 指定時は AI の手 (`/api/ai_move`) まで確認する
 

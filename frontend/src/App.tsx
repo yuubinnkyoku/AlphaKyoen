@@ -3,7 +3,6 @@ import { aiMove, getHints, playerMove } from "./api";
 import type { GameState, MoveResponse, Turn } from "./types";
 
 const SIZE = 9;
-const HUMAN: Turn = 1;
 
 function emptyState(): GameState {
   return {
@@ -18,19 +17,20 @@ function idxToLabel(idx: number): string {
   return `${row},${col}`;
 }
 
-function getStatusText(resp: MoveResponse | null, currentTurn: Turn, isAiThinking: boolean): string {
+function getStatusText(resp: MoveResponse | null, currentTurn: Turn, humanSide: Turn, isAiThinking: boolean): string {
   if (isAiThinking) return "AI thinking...";
-  if (!resp) return currentTurn === HUMAN ? "Your turn" : "AI turn";
-  if (!resp.done) return currentTurn === HUMAN ? "Your turn" : "AI turn";
+  if (!resp) return currentTurn === humanSide ? "Your turn" : "AI turn";
+  if (!resp.done) return currentTurn === humanSide ? "Your turn" : "AI turn";
 
   const loser = resp.turn * -1;
-  const loserText = loser === HUMAN ? "You" : "AI";
-  const winnerText = loser === HUMAN ? "AI" : "You";
+  const loserText = loser === humanSide ? "You" : "AI";
+  const winnerText = loser === humanSide ? "AI" : "You";
   return `${loserText} created Kyoen. ${winnerText} win.`;
 }
 
 export default function App() {
   const [state, setState] = useState<GameState>(emptyState);
+  const [humanSide, setHumanSide] = useState<Turn>(1);
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [error, setError] = useState<string>("");
   const [done, setDone] = useState(false);
@@ -42,8 +42,8 @@ export default function App() {
   const hintSet = useMemo(() => new Set(hintMoves), [hintMoves]);
   const resultSet = useMemo(() => new Set(lastResult?.kyoen_points ?? []), [lastResult]);
 
-  async function refreshHints(nextState: GameState, enabled = showHints): Promise<void> {
-    if (!enabled || done) {
+  async function refreshHints(nextState: GameState, enabled = showHints, gameDone = done): Promise<void> {
+    if (!enabled || gameDone) {
       setHintMoves([]);
       return;
     }
@@ -59,15 +59,31 @@ export default function App() {
       setState(aiState);
       setLastResult(aiResp);
       setDone(aiResp.done);
-      await refreshHints(aiState, showHints);
+      await refreshHints(aiState, showHints, aiResp.done);
     } finally {
       setIsAiThinking(false);
     }
   }
 
+  async function startNewGame(nextHumanSide: Turn): Promise<void> {
+    const init = emptyState();
+    setState(init);
+    setIsAiThinking(false);
+    setError("");
+    setDone(false);
+    setLastResult(null);
+    setShowHints(false);
+    setHintMoves([]);
+    setShowResult(false);
+
+    if (nextHumanSide === -1) {
+      await runAiTurn(init);
+    }
+  }
+
   async function onCellClick(idx: number): Promise<void> {
     if (done || isAiThinking) return;
-    if (state.turn !== HUMAN) return;
+    if (state.turn !== humanSide) return;
     if (state.board[idx] !== 0) return;
 
     setError("");
@@ -83,7 +99,7 @@ export default function App() {
         return;
       }
 
-      await refreshHints(nextState, showHints);
+      await refreshHints(nextState, showHints, false);
       await runAiTurn(nextState);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unexpected error");
@@ -104,16 +120,14 @@ export default function App() {
     }
   }
 
-  function onReset(): void {
-    const init = emptyState();
-    setState(init);
-    setIsAiThinking(false);
-    setError("");
-    setDone(false);
-    setLastResult(null);
-    setShowHints(false);
-    setHintMoves([]);
-    setShowResult(false);
+  async function onOrderChange(value: string): Promise<void> {
+    const nextHumanSide: Turn = value === "first" ? 1 : -1;
+    setHumanSide(nextHumanSide);
+    await startNewGame(nextHumanSide);
+  }
+
+  async function onReset(): Promise<void> {
+    await startNewGame(humanSide);
   }
 
   return (
@@ -132,6 +146,12 @@ export default function App() {
               <option value="9x9">9x9 (AI only)</option>
             </select>
 
+            <label htmlFor="order-select">Order</label>
+            <select id="order-select" value={humanSide === 1 ? "first" : "second"} onChange={(e) => void onOrderChange(e.target.value)}>
+              <option value="first">You first</option>
+              <option value="second">You second</option>
+            </select>
+
             <button type="button" onClick={() => setShowResult((v) => !v)} disabled={!lastResult?.kyoen_points?.length}>
               Result
             </button>
@@ -140,10 +160,10 @@ export default function App() {
               {showHints ? "Hint Off" : "Hint"}
             </button>
 
-            <button type="button" onClick={onReset}>Reset</button>
+            <button type="button" onClick={() => void onReset()}>Reset</button>
           </div>
 
-          <div className="status">{getStatusText(lastResult, state.turn, isAiThinking)}</div>
+          <div className="status">{getStatusText(lastResult, state.turn, humanSide, isAiThinking)}</div>
           {showResult && lastResult?.kyoen_points?.length ? (
             <div className="result-text">
               Kyoen points: {lastResult.kyoen_points.map((i) => idxToLabel(i)).join(" | ")}
@@ -157,7 +177,7 @@ export default function App() {
             {state.board.map((cell, idx) => {
               const hint = showHints && hintSet.has(idx) && cell === 0;
               const result = showResult && resultSet.has(idx);
-              const disabled = done || isAiThinking || state.turn !== HUMAN || cell !== 0;
+              const disabled = done || isAiThinking || state.turn !== humanSide || cell !== 0;
               const cls = [
                 "cell",
                 cell === 1 ? "stone-o" : "",
