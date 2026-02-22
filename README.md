@@ -61,8 +61,6 @@ npm run dev
 
 - ワークフロー: `.github/workflows/deploy-pages.yml`
 - `main` ブランチ push で `frontend/dist` を Pages にデプロイ
-- `VITE_API_BASE_URL` は GitHub Repository Variables で設定
-- 初回のみ GitHub の `Settings > Pages` で Build and deployment を `GitHub Actions` にしておく
 
 Repository Variables 例:
 
