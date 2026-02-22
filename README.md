@@ -1,3 +1,13 @@
+---
+title: AlphaKyoen
+emoji: ⭕
+colorFrom: blue
+colorTo: red
+sdk: docker
+pinned: false
+app_port: 7860
+---
+
 # AlphaKyoen "Tsubura-円"
 
 9x9共円パズルAI

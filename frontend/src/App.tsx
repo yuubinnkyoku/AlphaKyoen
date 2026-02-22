@@ -1,6 +1,6 @@
+import { TFunction } from "i18next";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { TFunction } from "i18next";
 import { aiMove, getHints, playerMove } from "./api";
 import type { GameState, MoveResponse, Turn } from "./types";
 
