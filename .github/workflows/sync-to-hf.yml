@@ -31,17 +31,17 @@ jobs:
         run: |
           set -e
           mkdir -p hf_sync
-          git ls-files -z \
-            ':!models/**' \
-            ':!*.msgpack' \
-            ':!*.pth' \
-            ':!*.npy' \
-            ':!frontend/node_modules/**' \
-            ':!frontend/dist/**' \
-            ':!__pycache__/**' \
-            ':!src/__pycache__/**' \
-            ':!*.tsbuildinfo' \
-            | rsync -a --files-from=- --from0 ./ hf_sync/
+          rsync -a ./ hf_sync/ \
+            --exclude '.git/' \
+            --exclude 'models/' \
+            --exclude '*.msgpack' \
+            --exclude '*.pth' \
+            --exclude '*.npy' \
+            --exclude 'frontend/node_modules/' \
+            --exclude 'frontend/dist/' \
+            --exclude '__pycache__/' \
+            --exclude 'src/__pycache__/' \
+            --exclude '*.tsbuildinfo'
 
       - name: Push clean tree to Hugging Face Space
         run: |
@@ -51,6 +51,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Sync from GitHub ${GITHUB_SHA}" || true
+          git commit --allow-empty -m "Sync from GitHub ${GITHUB_SHA}"
           git remote add origin "https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE"
           git push --force origin HEAD:main
