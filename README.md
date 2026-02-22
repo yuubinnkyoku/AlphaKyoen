@@ -30,8 +30,6 @@ uv run src/main.py
 
 ## Web UI (React + FastAPI)
 
-以下を実装済みです。
-
 - GitHub Pages 配信の React フロントエンド
 - Hugging Face Spaces 配信の FastAPI バックエンド
 - 機能: 9x9 AI対戦、Size UI (9x9固定)、Resultボタン、Hintボタン
@@ -80,7 +78,7 @@ Repository Variables 例:
 - リポジトリ: このリポジトリを接続
 - 公開URL: `https://<your-space-name>.hf.space`
 
-### 5) API スモークテスト (uv)
+### 5) API スモークテスト
 
 ```bash
 uv run python scripts/smoke_api.py
@@ -91,11 +89,4 @@ AI の一手まで確認する場合:
 ```bash
 uv run python scripts/smoke_api.py --with-ai
 ```
-
-確認内容:
-
-- `health` が `{"ok": true}` を返す
-- `hint` が配列で返る
-- 人間の手 (`/api/move`) が進行できる
-- `--with-ai` 指定時は AI の手 (`/api/ai_move`) まで確認する
 
