@@ -1,7 +1,7 @@
 name: Sync to Hugging Face hub
 on:
   push:
-    branches: [main]
+    branches: [main, master]
 
   # to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -9,13 +9,26 @@ on:
 jobs:
   sync-to-hub:
     runs-on: ubuntu-latest
+    env:
+      HF_USERNAME: yuubinnkyoku
+      HF_SPACE: AlphaKyoen
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           lfs: true
-      - name: Push to hub
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: git push --force https://yuubinnkyoku:$HF_TOKEN@huggingface.co/spaces/yuubinnkyoku/AlphaKyoen main
+
+      - name: Validate HF token
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "HF_TOKEN is empty. Set repository secret HF_TOKEN (write scope)."
+            exit 1
+          fi
+
+      - name: Push to Hugging Face Space
+        run: |
+          set -e
+          git remote add hf "https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE"
+          git push --force hf HEAD:main
