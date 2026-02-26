@@ -59,6 +59,17 @@ _model_lock = Lock()
 _policy_model: PolicyValueNet | None = None
 
 
+@app.get("/")
+def root() -> dict:
+    return {
+        "service": "AlphaKyoen API",
+        "message": "Backend is running. This Space serves API endpoints.",
+        "health": "/api/health",
+        "docs": "/docs",
+        "frontend": "https://yuubinnkyoku.github.io/AlphaKyoen/",
+    }
+
+
 def _state_to_board(state: GameState) -> Board:
     arr = np.array(state.board, dtype=np.int8)
     if not np.all(np.isin(arr, np.array([-1, 0, 1], dtype=np.int8))):
