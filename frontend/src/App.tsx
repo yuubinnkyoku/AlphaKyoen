@@ -19,6 +19,21 @@ function idxToLabel(idx: number): string {
   return `${row},${col}`;
 }
 
+function getCircumcircle(p1: [number, number], p2: [number, number], p3: [number, number]) {
+  const [x1, y1] = p1;
+  const [x2, y2] = p2;
+  const [x3, y3] = p3;
+  const d = 2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
+  if (Math.abs(d) < 1e-6) return null;
+  const h1 = x1 * x1 + y1 * y1;
+  const h2 = x2 * x2 + y2 * y2;
+  const h3 = x3 * x3 + y3 * y3;
+  const cx = (h1 * (y2 - y3) + h2 * (y3 - y1) + h3 * (y1 - y2)) / d;
+  const cy = (h1 * (x3 - x2) + h2 * (x1 - x3) + h3 * (x2 - x1)) / d;
+  const r = Math.sqrt((cx - x1) ** 2 + (cy - y1) ** 2);
+  return { cx, cy, r };
+}
+
 function getStatusText(
   t: TFunction,
   resp: MoveResponse | null,
@@ -139,6 +154,27 @@ export default function App() {
     await startNewGame(humanSide);
   }
 
+  const renderCircumcircle = () => {
+    if (!lastResult?.kyoen_points || lastResult.kyoen_points.length < 3) return null;
+    const pts = lastResult.kyoen_points.slice(0, 3).map((idx) => {
+      const row = Math.floor(idx / SIZE) + 1;
+      const col = (idx % SIZE) + 1;
+      return [col, row] as [number, number];
+    });
+    const circle = getCircumcircle(pts[0], pts[1], pts[2]);
+    if (!circle) return null;
+    return (
+      <circle
+        cx={circle.cx}
+        cy={circle.cy}
+        r={circle.r}
+        fill="transparent"
+        stroke="#4a4ae6"
+        strokeWidth={0.04}
+      />
+    );
+  };
+
   return (
     <div className="page">
       <main className="shell">
@@ -196,36 +232,60 @@ export default function App() {
         </section>
 
         <section className="board-wrap" aria-label="Kyoen board">
-          <div className="board" role="grid">
+          <svg className="board-svg" viewBox="0 0 10 10" width="100%" height="100%">
+            {/* Grid Lines */}
+            {Array.from({ length: SIZE }, (_, i) => i + 1).map((pos) => (
+              <g key={`lines-${pos}`}>
+                {/* Horizontal */}
+                <line x1={0.5} y1={pos} x2={9.5} y2={pos} stroke="#111" strokeWidth={0.03} />
+                {/* Vertical */}
+                <line x1={pos} y1={0.5} x2={pos} y2={9.5} stroke="#111" strokeWidth={0.03} />
+              </g>
+            ))}
+
+            {/* Hint & Result Highlights / Interaction Areas */}
             {state.board.map((cell, idx) => {
+              const row = Math.floor(idx / SIZE) + 1;
+              const col = (idx % SIZE) + 1;
               const hint = showHints && hintSet.has(idx) && cell === 0;
               const result = showResult && resultSet.has(idx);
               const disabled = done || isAiThinking || state.turn !== humanSide || cell !== 0;
-              const cls = [
-                "cell",
-                cell === 1 ? "stone-o" : "",
-                cell === -1 ? "stone-x" : "",
-                hint ? "hint" : "",
-                result ? "result" : "",
-              ]
-                .filter(Boolean)
-                .join(" ");
 
               return (
-                <button
-                  key={idx}
-                  type="button"
-                  role="gridcell"
-                  className={cls}
-                  onClick={() => void onCellClick(idx)}
-                  disabled={disabled}
-                  aria-label={`cell-${idx}`}
-                >
-                  {cell === 1 ? "O" : cell === -1 ? "X" : ""}
-                </button>
+                <g key={`cell-${idx}`} transform={`translate(${col}, ${row})`}>
+                  {/* Highlight (hint or result) */}
+                  {(hint || result) && (
+                    <rect
+                      x={-0.5}
+                      y={-0.5}
+                      width={1}
+                      height={1}
+                      className={result ? "cell-bg result" : hint ? "cell-bg hint" : "cell-bg"}
+                    />
+                  )}
+
+                  {/* Invisible rect for click events */}
+                  <rect
+                    x={-0.5}
+                    y={-0.5}
+                    width={1}
+                    height={1}
+                    className={`cell-interactive ${disabled ? "disabled" : ""}`}
+                    onClick={() => {
+                      if (!disabled) void onCellClick(idx);
+                    }}
+                  />
+
+                  {/* Stone */}
+                  {cell === humanSide && <circle r={0.25} className="stone-you" />}
+                  {cell !== 0 && cell !== humanSide && <circle r={0.25} className="stone-ai" />}
+                </g>
               );
             })}
-          </div>
+
+            {/* Circumcircle (Result) */}
+            {showResult && renderCircumcircle()}
+          </svg>
         </section>
       </main>
     </div>

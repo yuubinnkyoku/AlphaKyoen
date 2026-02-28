@@ -19,10 +19,7 @@ body {
   min-height: 100vh;
   font-family: "Zen Kaku Gothic New", sans-serif;
   color: var(--ink);
-  background:
-    radial-gradient(circle at 10% 20%, #fff8dd 0%, transparent 45%),
-    radial-gradient(circle at 90% 15%, #d1efe6 0%, transparent 38%),
-    linear-gradient(180deg, #f8f3de 0%, #f2f8ff 65%, #edf4ff 100%);
+  background: linear-gradient(180deg, #9f8472 0%, #5a807d 100%);
 }
 
 .page {
@@ -157,54 +154,45 @@ button:disabled {
 }
 
 .board-wrap {
-  background: rgba(255, 255, 255, 0.82);
-  border: 2px solid #ffffff;
-  border-radius: 20px;
-  padding: 16px;
+  width: 100%;
   display: grid;
   place-items: center;
 }
 
-.board {
+.board-svg {
   width: min(94vw, 560px);
   aspect-ratio: 1 / 1;
-  display: grid;
-  gap: 0;
-  grid-template-columns: repeat(9, 1fr);
-  border: 3px solid #0f2f52;
-  background:
-    linear-gradient(90deg, rgba(15, 47, 82, 0.18) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(15, 47, 82, 0.18) 1px, transparent 1px),
-    linear-gradient(180deg, #fbf6df 0%, #efe4bd 100%);
-  background-size: calc(100% / 9) calc(100% / 9);
+  display: block;
 }
 
-.cell {
-  border: 1px solid rgba(17, 37, 65, 0.22);
-  background: transparent;
-  margin: 0;
-  border-radius: 0;
-  font-size: clamp(14px, 2vw, 22px);
-  font-weight: 700;
-  color: var(--ink);
-  display: grid;
-  place-items: center;
+.cell-bg {
+  fill: transparent;
+  transition: fill 0.15s ease;
 }
 
-.cell.stone-o {
-  color: #0b7a75;
+.cell-bg.result {
+  fill: rgba(210, 220, 0, 0.45);
 }
 
-.cell.stone-x {
-  color: #aa4f19;
+.cell-bg.hint {
+  fill: rgba(255, 255, 255, 0.2);
 }
 
-.cell.hint {
-  background: color-mix(in srgb, var(--accent) 45%, transparent);
+.cell-interactive {
+  fill: transparent;
+  cursor: pointer;
 }
 
-.cell.result {
-  box-shadow: inset 0 0 0 3px #de2e1e;
+.cell-interactive.disabled {
+  cursor: not-allowed;
+}
+
+.stone-you {
+  fill: #ff0000;
+}
+
+.stone-ai {
+  fill: #0b7a75;
 }
 
 @media (max-width: 700px) {
