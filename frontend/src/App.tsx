@@ -176,63 +176,67 @@ export default function App() {
   };
 
   return (
-    <div className="page">
-      <main className="shell">
-        <header className="hero">
-          <div className="lang-switcher">
+    <div className="grid place-items-center px-3.5 pt-6 pb-10 max-sm:px-2.5 max-sm:pt-3 max-sm:pb-6">
+      <main className="grid gap-4 w-full max-w-[980px]">
+        <header className="relative bg-white/70 border-2 border-white rounded-[18px] px-5 py-[18px] backdrop-blur-sm">
+          <div className="absolute top-2.5 right-3.5 flex gap-1">
             <button
-              className={i18n.language === "en" ? "active" : ""}
+              className={`px-2 py-1 text-[11px] rounded-md font-bold border border-line cursor-pointer transition-opacity ${
+                i18n.language === "en" ? "bg-line text-white opacity-100" : "bg-transparent text-ink opacity-60 hover:opacity-80"
+              }`}
               onClick={() => changeLanguage("en")}
             >
               EN
             </button>
             <button
-              className={i18n.language === "ja" ? "active" : ""}
+              className={`px-2 py-1 text-[11px] rounded-md font-bold border border-line cursor-pointer transition-opacity ${
+                i18n.language === "ja" ? "bg-line text-white opacity-100" : "bg-transparent text-ink opacity-60 hover:opacity-80"
+              }`}
               onClick={() => changeLanguage("ja")}
             >
               JA
             </button>
           </div>
-          <p className="eyebrow">{t("subtitle")}</p>
-          <h1>{t("title")}</h1>
-          <p className="sub">{t("instruction")}</p>
+          <p className="m-0 font-display font-bold tracking-[0.08em] uppercase text-brand">{t("subtitle")}</p>
+          <h1 className="mt-1 mb-0.5 font-display font-bold text-[clamp(1.7rem,3vw,2.5rem)]">{t("title")}</h1>
+          <p className="m-0 opacity-[0.82]">{t("instruction")}</p>
         </header>
 
-        <section className="panel">
-          <div className="controls">
-            <label htmlFor="size-select">{t("size")}</label>
-            <select id="size-select" value="9x9" onChange={() => undefined}>
+        <section className="bg-white/80 border-2 border-white rounded-2xl p-3.5">
+          <div className="flex flex-wrap gap-2.5 items-center">
+            <label htmlFor="size-select" className="font-display font-bold">{t("size")}</label>
+            <select id="size-select" className="control-input" value="9x9" onChange={() => undefined}>
               <option value="9x9">{t("sizeAiOnly")}</option>
             </select>
 
-            <label htmlFor="order-select">{t("order")}</label>
-            <select id="order-select" value={humanSide === 1 ? "first" : "second"} onChange={(e) => void onOrderChange(e.target.value)}>
+            <label htmlFor="order-select" className="font-display font-bold">{t("order")}</label>
+            <select id="order-select" className="control-input" value={humanSide === 1 ? "first" : "second"} onChange={(e) => void onOrderChange(e.target.value)}>
               <option value="first">{t("youFirst")}</option>
               <option value="second">{t("youSecond")}</option>
             </select>
 
-            <button type="button" onClick={() => setShowResult((v) => !v)} disabled={!lastResult?.kyoen_points?.length}>
+            <button type="button" className="btn" onClick={() => setShowResult((v) => !v)} disabled={!lastResult?.kyoen_points?.length}>
               {t("result")}
             </button>
 
-            <button type="button" onClick={onToggleHints} disabled={done || isAiThinking}>
+            <button type="button" className="btn" onClick={onToggleHints} disabled={done || isAiThinking}>
               {showHints ? t("hintOff") : t("hint")}
             </button>
 
-            <button type="button" onClick={() => void onReset()}>{t("reset")}</button>
+            <button type="button" className="btn" onClick={() => void onReset()}>{t("reset")}</button>
           </div>
 
-          <div className="status">{getStatusText(t, lastResult, state.turn, humanSide, isAiThinking)}</div>
+          <div className="mt-2.5 font-bold">{getStatusText(t, lastResult, state.turn, humanSide, isAiThinking)}</div>
           {showResult && lastResult?.kyoen_points?.length ? (
-            <div className="result-text">
+            <div className="mt-1.5 text-brand font-display font-bold">
               {t("kyoenPoints")}: {lastResult.kyoen_points.map((i) => idxToLabel(i)).join(" | ")}
             </div>
           ) : null}
-          {error ? <div className="error">{error}</div> : null}
+          {error ? <div className="mt-1.5 text-error font-display font-bold whitespace-pre-wrap">{error}</div> : null}
         </section>
 
-        <section className="board-wrap" aria-label="Kyoen board">
-          <svg className="board-svg" viewBox="0 0 10 10" width="100%" height="100%">
+        <section className="w-full grid place-items-center" aria-label="Kyoen board">
+          <svg className="block aspect-square w-full max-w-[94vw] sm:max-w-[560px]" viewBox="0 0 10 10" width="100%" height="100%">
             {/* Grid Lines */}
             {Array.from({ length: SIZE }, (_, i) => i + 1).map((pos) => (
               <g key={`lines-${pos}`}>

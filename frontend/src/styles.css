@@ -1,208 +1,61 @@
 @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=LINE+Seed+JP:wght@400;700;800&display=swap");
+@import "tailwindcss";
 
-:root {
-  --ink: #102038;
-  --brand: #0b7a75;
-  --brand-soft: #caeee8;
-  --accent: #e4b80b;
-  --paper: #f8f6ef;
-  --error: #9b2226;
-  --line: #2c405a;
+@theme {
+  --color-ink: #102038;
+  --color-brand: #0b7a75;
+  --color-brand-soft: #caeee8;
+  --color-accent: #e4b80b;
+  --color-paper: #f8f6ef;
+  --color-error: #9b2226;
+  --color-line: #2c405a;
+
+  --font-sans: "LINE Seed JP", sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
 }
 
-* {
-  box-sizing: border-box;
+@layer base {
+  body {
+    @apply min-h-screen text-ink;
+    background: linear-gradient(180deg, #9f8472 0%, #5a807d 100%);
+  }
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  font-family: "LINE Seed JP", sans-serif;
-  color: var(--ink);
-  background: linear-gradient(180deg, #9f8472 0%, #5a807d 100%);
-}
-
-.page {
-  display: grid;
-  place-items: center;
-  padding: 24px 14px 40px;
-}
-
-.shell {
-  width: min(980px, 100%);
-  display: grid;
-  gap: 16px;
-}
-
-.hero {
-  background: rgba(255, 255, 255, 0.72);
-  border: 2px solid #ffffff;
-  border-radius: 18px;
-  padding: 18px 20px;
-  backdrop-filter: blur(5px);
-  position: relative;
-}
-
-.lang-switcher {
-  position: absolute;
-  top: 10px;
-  right: 14px;
-  display: flex;
-  gap: 4px;
-}
-
-.lang-switcher button {
-  padding: 4px 8px;
-  font-size: 11px;
-  border-radius: 6px;
-  font-weight: 700;
-  border: 1px solid var(--line);
-  background: transparent;
-  cursor: pointer;
-  opacity: 0.6;
-}
-
-.lang-switcher button.active {
-  background: var(--line);
-  color: #fff;
-  opacity: 1;
-}
-
-.eyebrow {
-  margin: 0;
-  font-family: "Space Grotesk", sans-serif;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--brand);
-}
-
-.hero h1 {
-  margin: 4px 0 2px;
-  font-family: "Space Grotesk", sans-serif;
-  font-size: clamp(1.7rem, 3vw, 2.5rem);
-}
-
-.sub {
-  margin: 0;
-  opacity: 0.82;
-}
-
-.panel {
-  background: rgba(255, 255, 255, 0.78);
-  border: 2px solid #ffffff;
-  border-radius: 16px;
-  padding: 14px;
-}
-
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-
-label {
-  font-family: "Space Grotesk", sans-serif;
-  font-weight: 700;
-}
-
-select,
-button {
-  border: 2px solid var(--line);
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-family: "Space Grotesk", sans-serif;
-  font-weight: 600;
-  background: #fff;
-  color: var(--ink);
-}
-
-button {
-  cursor: pointer;
-  transition: transform 120ms ease, background-color 120ms ease;
-}
-
-button:hover:enabled {
-  transform: translateY(-1px);
-  background: #f2f8ff;
-}
-
-button:disabled {
-  opacity: 0.56;
-  cursor: not-allowed;
-}
-
-.status {
-  margin-top: 10px;
-  font-weight: 700;
-}
-
-.result-text {
-  margin-top: 6px;
-  color: var(--brand);
-  font-family: "Space Grotesk", sans-serif;
-  font-weight: 700;
-}
-
-.error {
-  margin-top: 6px;
-  color: var(--error);
-  font-family: "Space Grotesk", sans-serif;
-  font-weight: 700;
-  white-space: pre-wrap;
-}
-
-.board-wrap {
-  width: 100%;
-  display: grid;
-  place-items: center;
-}
-
-.board-svg {
-  width: min(94vw, 560px);
-  aspect-ratio: 1 / 1;
-  display: block;
-}
-
-.cell-bg {
-  fill: transparent;
-  transition: fill 0.15s ease;
-}
-
-.cell-bg.result {
-  fill: rgba(210, 220, 0, 0.45);
-}
-
-.cell-bg.hint {
-  fill: rgba(255, 255, 255, 0.2);
-}
-
-.cell-interactive {
-  fill: transparent;
-  cursor: pointer;
-}
-
-.cell-interactive.disabled {
-  cursor: not-allowed;
-}
-
-.stone-you {
-  fill: #ff0000;
-}
-
-.stone-ai {
-  fill: #0b7a75;
-}
-
-@media (max-width: 700px) {
-  .page {
-    padding: 12px 10px 24px;
+@layer components {
+  .cell-bg {
+    @apply transition-colors duration-150 ease-in-out fill-transparent;
+  }
+  .cell-bg.result {
+    fill: rgba(210, 220, 0, 0.45);
+  }
+  .cell-bg.hint {
+    fill: rgba(255, 255, 255, 0.2);
   }
 
-  .hero,
-  .panel,
-  .board-wrap {
-    border-radius: 14px;
+  .cell-interactive {
+    @apply fill-transparent cursor-pointer;
+  }
+  .cell-interactive.disabled {
+    @apply cursor-not-allowed;
+  }
+
+  .stone-you {
+    fill: #ff0000;
+  }
+  .stone-ai {
+    fill: #0b7a75;
+  }
+
+  .control-input {
+    @apply border-2 border-line rounded-[10px] px-3 py-2 font-display font-semibold bg-white text-ink;
+  }
+  .btn {
+    @apply border-2 border-line rounded-[10px] px-3 py-2 font-display font-semibold bg-white text-ink cursor-pointer transition-transform duration-150 ease-in-out;
+  }
+  .btn:not(:disabled):hover {
+    @apply -translate-y-px bg-[#f2f8ff];
+  }
+  .btn:disabled {
+    @apply opacity-60 cursor-not-allowed;
   }
 }
