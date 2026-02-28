@@ -239,10 +239,10 @@ export default function App() {
           </div>
 
           <div className="flex gap-1.5 ml-auto">
-            <button type="button" className="btn" onClick={() => setShowResult((v) => !v)}>
+            <button type="button" className={`btn ${showResult ? "btn-active" : ""}`} onClick={() => setShowResult((v) => !v)}>
               {t("result")}
             </button>
-            <button type="button" className="btn" onClick={onToggleHints} disabled={done || isAiThinking}>
+            <button type="button" className={`btn ${showHints ? "btn-active" : ""}`} onClick={onToggleHints} disabled={done || isAiThinking}>
               {showHints ? t("hintOff") : t("hint")}
             </button>
             <button type="button" className="btn btn-accent" onClick={() => void onReset()}>

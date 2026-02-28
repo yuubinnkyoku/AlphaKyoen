@@ -102,6 +102,16 @@
   .btn:disabled {
     @apply opacity-40 cursor-not-allowed;
   }
+  .btn-active {
+    background: var(--color-brand);
+    color: #0d1117;
+    border-color: var(--color-brand);
+  }
+  .btn-active:not(:disabled):hover {
+    background: #38b2ac;
+    border-color: #38b2ac;
+    color: #0d1117;
+  }
   .btn-accent {
     background: var(--color-brand);
     color: #0d1117;
