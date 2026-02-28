@@ -1,5 +1,5 @@
 import { TFunction } from "i18next";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { aiMove, getHints, playerMove } from "./api";
 import type { GameState, MoveResponse, Turn } from "./types";
@@ -58,19 +58,21 @@ export default function App() {
   const [showHints, setShowHints] = useState(false);
   const [hintMoves, setHintMoves] = useState<number[]>([]);
   const [showResult, setShowResult] = useState(false);
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem("theme");
-    if (saved) return saved === "dark";
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
-  });
-
-  useEffect(() => {
-    document.body.classList.toggle("dark", dark);
-    localStorage.setItem("theme", dark ? "dark" : "light");
-  }, [dark]);
+  const prevBoard = useRef<number[]>([]);
 
   const hintSet = useMemo(() => new Set(hintMoves), [hintMoves]);
   const resultSet = useMemo(() => new Set(lastResult?.kyoen_points ?? []), [lastResult]);
+  const newStones = useMemo(() => {
+    const s = new Set<number>();
+    state.board.forEach((cell, i) => {
+      if (cell !== 0 && (prevBoard.current[i] ?? 0) === 0) s.add(i);
+    });
+    return s;
+  }, [state.board]);
+
+  useEffect(() => {
+    prevBoard.current = [...state.board];
+  }, [state.board]);
 
   const changeLanguage = (lng: string) => {
     void i18n.changeLanguage(lng);
@@ -101,6 +103,7 @@ export default function App() {
 
   async function startNewGame(nextHumanSide: Turn): Promise<void> {
     const init = emptyState();
+    prevBoard.current = [];
     setState(init);
     setIsAiThinking(false);
     setError("");
@@ -179,139 +182,183 @@ export default function App() {
         cy={circle.cy}
         r={circle.r}
         fill="transparent"
-        stroke="#4a4ae6"
-        strokeWidth={0.04}
+        stroke="#f6c744"
+        strokeWidth={0.05}
+        strokeDasharray="0.12 0.06"
+        opacity={0.8}
       />
     );
   };
 
-  return (
-    <div className={`grid place-items-center px-3.5 pt-3 pb-6 max-sm:px-2 max-sm:pt-2 max-sm:pb-4${dark ? " dark" : ""}`}>
-      <main className="grid gap-3 w-full max-w-[600px]">
-        <section className={`card border-2 rounded-2xl p-3 ${dark ? "bg-[#0f172a]/80 border-[#334155]" : "bg-white/80 border-white"}`}>
-          <div className="flex flex-wrap gap-2 items-center">
-            <label htmlFor="size-select" className="font-display font-bold">{t("size")}</label>
-            <select id="size-select" className="control-input" value="9x9" onChange={() => undefined}>
-              <option value="9x9">{t("sizeAiOnly")}</option>
-            </select>
+  const statusText = getStatusText(t, lastResult, state.turn, humanSide, isAiThinking);
+  const isWin = lastResult?.done && lastResult.turn === humanSide;
+  const isLoss = lastResult?.done && lastResult.turn !== humanSide;
 
-            <label htmlFor="order-select" className="font-display font-bold">{t("order")}</label>
-            <select id="order-select" className="control-input" value={humanSide === 1 ? "first" : "second"} onChange={(e) => void onOrderChange(e.target.value)}>
+  return (
+    <div className="min-h-screen grid place-items-center px-4 py-6 max-sm:px-2 max-sm:py-3">
+      <main className="grid gap-4 w-full max-w-[560px]">
+        {/* ── Header ── */}
+        <header className="flex items-end justify-between">
+          <div>
+            <h1 className="font-display font-bold text-3xl tracking-tight max-sm:text-2xl">
+              <span className="text-brand">Alpha</span>
+              <span className="text-ink">Kyoen</span>
+            </h1>
+            <p className="text-xs text-ink/40 font-display tracking-widest uppercase mt-0.5">MCTS + Neural Net</p>
+          </div>
+          <div className="flex gap-1 items-center">
+            {(["en", "ja"] as const).map((lng) => (
+              <button
+                key={lng}
+                className={`px-2.5 py-1 text-xs rounded-md font-display font-bold cursor-pointer transition-all
+                  ${i18n.language === lng
+                    ? "bg-brand text-[#0d1117]"
+                    : "bg-transparent text-ink/40 hover:text-ink/70"
+                  }`}
+                onClick={() => changeLanguage(lng)}
+              >
+                {lng.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        {/* ── Control Bar ── */}
+        <section className="flex flex-wrap gap-2 items-center rounded-xl px-4 py-2.5 border border-line/60 bg-surface/80 backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            <label htmlFor="order-select" className="font-display font-bold text-sm text-ink/60">{t("order")}</label>
+            <select
+              id="order-select"
+              className="control-input"
+              value={humanSide === 1 ? "first" : "second"}
+              onChange={(e) => void onOrderChange(e.target.value)}
+            >
               <option value="first">{t("youFirst")}</option>
               <option value="second">{t("youSecond")}</option>
             </select>
+          </div>
 
+          <div className="flex gap-1.5 ml-auto">
             <button type="button" className="btn" onClick={() => setShowResult((v) => !v)}>
               {t("result")}
             </button>
-
             <button type="button" className="btn" onClick={onToggleHints} disabled={done || isAiThinking}>
               {showHints ? t("hintOff") : t("hint")}
             </button>
-
-            <button type="button" className="btn" onClick={() => void onReset()}>{t("reset")}</button>
-
-            <span className="ml-auto flex gap-1">
-              <button
-                className={`px-2 py-1 text-[11px] rounded-md font-bold border cursor-pointer transition-opacity ${
-                  dark ? "border-[#475569]" : "border-line"
-                } ${dark ? "text-[#e4e8ef]" : ""} opacity-60 hover:opacity-100`}
-                onClick={() => setDark((d) => !d)}
-                aria-label={dark ? t("lightMode") : t("darkMode")}
-              >
-                {dark ? "☀️" : "🌙"}
-              </button>
-              <button
-                className={`px-2 py-1 text-[11px] rounded-md font-bold border cursor-pointer transition-opacity ${
-                  dark ? "border-[#475569]" : "border-line"
-                } ${
-                  i18n.language === "en"
-                    ? dark ? "bg-[#475569] text-white opacity-100" : "bg-line text-white opacity-100"
-                    : dark ? "bg-transparent text-[#e4e8ef] opacity-60 hover:opacity-80" : "bg-transparent text-ink opacity-60 hover:opacity-80"
-                }`}
-                onClick={() => changeLanguage("en")}
-              >
-                EN
-              </button>
-              <button
-                className={`px-2 py-1 text-[11px] rounded-md font-bold border cursor-pointer transition-opacity ${
-                  dark ? "border-[#475569]" : "border-line"
-                } ${
-                  i18n.language === "ja"
-                    ? dark ? "bg-[#475569] text-white opacity-100" : "bg-line text-white opacity-100"
-                    : dark ? "bg-transparent text-[#e4e8ef] opacity-60 hover:opacity-80" : "bg-transparent text-ink opacity-60 hover:opacity-80"
-                }`}
-                onClick={() => changeLanguage("ja")}
-              >
-                JA
-              </button>
-            </span>
+            <button type="button" className="btn btn-accent" onClick={() => void onReset()}>
+              {t("reset")}
+            </button>
           </div>
-
-          <div className="mt-2.5 font-bold">{getStatusText(t, lastResult, state.turn, humanSide, isAiThinking)}</div>
-          {showResult && lastResult?.kyoen_points?.length ? (
-            <div className="mt-1.5 text-brand font-display font-bold">
-              {t("kyoenPoints")}: {lastResult.kyoen_points.map((i) => idxToLabel(i)).join(" | ")}
-            </div>
-          ) : null}
-          {error ? <div className="mt-1.5 text-error font-display font-bold whitespace-pre-wrap">{error}</div> : null}
         </section>
 
+        {/* ── Status ── */}
+        <div className="flex items-center gap-3 px-1">
+          <div className={`flex items-center gap-2 font-display font-bold text-sm
+            ${isWin ? "text-brand" : isLoss ? "text-error" : isAiThinking ? "text-accent thinking-pulse" : "text-ink/70"}`}>
+            {isAiThinking && (
+              <span className="inline-block w-2 h-2 rounded-full bg-accent" />
+            )}
+            {statusText}
+          </div>
+          {showResult && lastResult?.kyoen_points?.length ? (
+            <div className="text-xs font-display text-accent/80">
+              {t("kyoenPoints")}: {lastResult.kyoen_points.map((i) => idxToLabel(i)).join(" · ")}
+            </div>
+          ) : null}
+        </div>
+        {error && <div className="text-error text-sm font-display font-bold px-1">{error}</div>}
+
+        {/* ── Board ── */}
         <section className="w-full grid place-items-center" aria-label="Kyoen board">
-          <svg className="block aspect-square w-full max-w-[94vw] sm:max-w-[520px]" viewBox="0 0 10 10" width="100%" height="100%">
-            {/* Grid Lines */}
-            {Array.from({ length: SIZE }, (_, i) => i + 1).map((pos) => (
-              <g key={`lines-${pos}`}>
-                {/* Horizontal */}
-                <line x1={0.5} y1={pos} x2={9.5} y2={pos} stroke={dark ? "#8899aa" : "#111"} strokeWidth={0.03} />
-                {/* Vertical */}
-                <line x1={pos} y1={0.5} x2={pos} y2={9.5} stroke={dark ? "#8899aa" : "#111"} strokeWidth={0.03} />
-              </g>
-            ))}
+          <div className="relative w-full max-w-[94vw] sm:max-w-[520px] rounded-2xl p-3 bg-surface border border-line/40">
+            <svg className="block aspect-square w-full" viewBox="0 0 10 10" width="100%" height="100%">
+              <defs>
+                <radialGradient id="stone-human" cx="35%" cy="35%">
+                  <stop offset="0%" stopColor="#ff6b6b" />
+                  <stop offset="100%" stopColor="#c0392b" />
+                </radialGradient>
+                <radialGradient id="stone-computer" cx="35%" cy="35%">
+                  <stop offset="0%" stopColor="#81e6d9" />
+                  <stop offset="100%" stopColor="#319795" />
+                </radialGradient>
+                <filter id="stone-shadow">
+                  <feDropShadow dx="0" dy="0.03" stdDeviation="0.04" floodOpacity="0.5" />
+                </filter>
+              </defs>
 
-            {/* Hint & Result Highlights / Interaction Areas */}
-            {state.board.map((cell, idx) => {
-              const row = Math.floor(idx / SIZE) + 1;
-              const col = (idx % SIZE) + 1;
-              const hint = showHints && hintSet.has(idx) && cell === 0;
-              const result = showResult && resultSet.has(idx);
-              const disabled = done || isAiThinking || state.turn !== humanSide || cell !== 0;
+              {/* Board background */}
+              <rect x="0.4" y="0.4" width="9.2" height="9.2" rx="0.15" fill="#1a2233" />
 
-              return (
-                <g key={`cell-${idx}`} transform={`translate(${col}, ${row})`}>
-                  {/* Highlight (hint or result) */}
-                  {(hint || result) && (
+              {/* Grid Lines */}
+              {Array.from({ length: SIZE }, (_, i) => i + 1).map((pos) => (
+                <g key={`lines-${pos}`}>
+                  <line x1={0.8} y1={pos} x2={9.2} y2={pos} stroke="#2d3748" strokeWidth={0.025} />
+                  <line x1={pos} y1={0.8} x2={pos} y2={9.2} stroke="#2d3748" strokeWidth={0.025} />
+                </g>
+              ))}
+
+              {/* Star points */}
+              {[3, 5, 7].flatMap((r) =>
+                [3, 5, 7].map((c) => (
+                  <circle key={`star-${r}-${c}`} cx={c} cy={r} r={0.06} fill="#2d3748" />
+                ))
+              )}
+
+              {/* Cells */}
+              {state.board.map((cell, idx) => {
+                const row = Math.floor(idx / SIZE) + 1;
+                const col = (idx % SIZE) + 1;
+                const hint = showHints && hintSet.has(idx) && cell === 0;
+                const result = showResult && resultSet.has(idx);
+                const disabled = done || isAiThinking || state.turn !== humanSide || cell !== 0;
+                const isNew = newStones.has(idx);
+
+                return (
+                  <g key={`cell-${idx}`} transform={`translate(${col}, ${row})`}>
+                    {(hint || result) && (
+                      <rect
+                        x={-0.5}
+                        y={-0.5}
+                        width={1}
+                        height={1}
+                        className={result ? "cell-bg result" : "cell-bg hint"}
+                      />
+                    )}
+
                     <rect
                       x={-0.5}
                       y={-0.5}
                       width={1}
                       height={1}
-                      className={result ? "cell-bg result" : hint ? "cell-bg hint" : "cell-bg"}
+                      className={`cell-interactive ${disabled ? "disabled" : ""}`}
+                      onClick={() => {
+                        if (!disabled) void onCellClick(idx);
+                      }}
                     />
-                  )}
 
-                  {/* Invisible rect for click events */}
-                  <rect
-                    x={-0.5}
-                    y={-0.5}
-                    width={1}
-                    height={1}
-                    className={`cell-interactive ${disabled ? "disabled" : ""}`}
-                    onClick={() => {
-                      if (!disabled) void onCellClick(idx);
-                    }}
-                  />
+                    {cell === humanSide && (
+                      <circle
+                        r={0.3}
+                        fill="url(#stone-human)"
+                        filter="url(#stone-shadow)"
+                        className={`stone-you ${isNew ? "stone-new" : ""}`}
+                      />
+                    )}
+                    {cell !== 0 && cell !== humanSide && (
+                      <circle
+                        r={0.3}
+                        fill="url(#stone-computer)"
+                        filter="url(#stone-shadow)"
+                        className={`stone-ai ${isNew ? "stone-new" : ""}`}
+                      />
+                    )}
+                  </g>
+                );
+              })}
 
-                  {/* Stone */}
-                  {cell === humanSide && <circle r={0.25} className="stone-you" />}
-                  {cell !== 0 && cell !== humanSide && <circle r={0.25} className="stone-ai" />}
-                </g>
-              );
-            })}
-
-            {/* Circumcircle (Result) */}
-            {showResult && renderCircumcircle()}
-          </svg>
+              {showResult && renderCircumcircle()}
+            </svg>
+          </div>
         </section>
       </main>
     </div>

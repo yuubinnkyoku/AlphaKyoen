@@ -2,13 +2,15 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink: #102038;
-  --color-brand: #0b7a75;
-  --color-brand-soft: #caeee8;
-  --color-accent: #e4b80b;
-  --color-paper: #f8f6ef;
-  --color-error: #9b2226;
-  --color-line: #2c405a;
+  --color-ink: #e8e4df;
+  --color-brand: #4fd1c5;
+  --color-brand-soft: #1a3a38;
+  --color-accent: #f6c744;
+  --color-paper: #0d1117;
+  --color-error: #f87171;
+  --color-line: #2d3748;
+  --color-surface: #161b22;
+  --color-surface-high: #1c2333;
 
   --font-sans: "LINE Seed JP", sans-serif;
   --font-display: "Space Grotesk", sans-serif;
@@ -17,68 +19,97 @@
 @layer base {
   body {
     @apply min-h-screen text-ink;
-    background: linear-gradient(180deg, #9f8472 0%, #5a807d 100%);
-  }
-  .dark body,
-  body.dark {
-    @apply text-[#e4e8ef];
-    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    background: #0d1117;
   }
 }
 
 @layer components {
+  /* ── Stone placement animation ── */
+  @keyframes stone-pop {
+    0% { transform: scale(0); opacity: 0; }
+    60% { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .stone-new {
+    animation: stone-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  /* ── Thinking pulse ── */
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+  .thinking-pulse {
+    animation: pulse-glow 1.2s ease-in-out infinite;
+  }
+
+  /* ── Cell highlights ── */
   .cell-bg {
     @apply transition-colors duration-150 ease-in-out fill-transparent;
   }
   .cell-bg.result {
-    fill: rgba(210, 220, 0, 0.45);
+    fill: rgba(246, 199, 68, 0.35);
   }
   .cell-bg.hint {
-    fill: rgba(255, 255, 255, 0.2);
+    fill: rgba(79, 209, 197, 0.15);
   }
 
   .cell-interactive {
     @apply fill-transparent cursor-pointer;
   }
+  .cell-interactive:not(.disabled):hover {
+    fill: rgba(79, 209, 197, 0.1);
+  }
   .cell-interactive.disabled {
     @apply cursor-not-allowed;
   }
 
+  /* ── Stones ── */
   .stone-you {
-    fill: #ff0000;
+    filter: drop-shadow(0 0.04px 0.08px rgba(0,0,0,0.5));
   }
   .stone-ai {
-    fill: #0b7a75;
+    filter: drop-shadow(0 0.04px 0.08px rgba(0,0,0,0.5));
   }
 
+  /* ── Controls ── */
   .control-input {
-    @apply border-2 border-line rounded-[10px] px-3 py-2 font-display font-semibold bg-white text-ink;
+    @apply border border-line rounded-lg px-3 py-1.5 font-display font-semibold text-sm;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    transition: border-color 0.15s;
   }
-  .dark .control-input {
-    @apply bg-[#1e293b] text-[#e4e8ef] border-[#475569];
+  .control-input:focus {
+    border-color: var(--color-brand);
+    outline: none;
   }
 
   .btn {
-    @apply border-2 border-line rounded-[10px] px-3 py-2 font-display font-semibold bg-white text-ink cursor-pointer transition-transform duration-150 ease-in-out;
-  }
-  .dark .btn {
-    @apply bg-[#1e293b] text-[#e4e8ef] border-[#475569];
+    @apply rounded-lg px-3.5 py-1.5 font-display font-semibold text-sm cursor-pointer;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border: 1px solid var(--color-line);
+    transition: all 0.15s ease;
   }
   .btn:not(:disabled):hover {
-    @apply -translate-y-px bg-[#f2f8ff];
+    background: var(--color-surface-high);
+    border-color: var(--color-brand);
+    color: var(--color-brand);
   }
-  .dark .btn:not(:disabled):hover {
-    @apply bg-[#334155];
+  .btn:not(:disabled):active {
+    transform: scale(0.97);
   }
   .btn:disabled {
-    @apply opacity-60 cursor-not-allowed;
+    @apply opacity-40 cursor-not-allowed;
   }
-
-  .dark .card {
-    @apply bg-[#0f172a]/80 border-[#334155];
+  .btn-accent {
+    background: var(--color-brand);
+    color: #0d1117;
+    border-color: var(--color-brand);
   }
-
-  .grid-line-dark {
-    stroke: #8899aa;
+  .btn-accent:not(:disabled):hover {
+    background: #38b2ac;
+    border-color: #38b2ac;
+    color: #0d1117;
   }
 }

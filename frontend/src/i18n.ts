@@ -5,8 +5,6 @@ import { initReactI18next } from "react-i18next";
 const resources = {
   en: {
     translation: {
-      size: "Size",
-      sizeAiOnly: "9x9 (AI only)",
       order: "Order",
       youFirst: "You first",
       youSecond: "You second",
@@ -24,14 +22,10 @@ const resources = {
       kyoenPoints: "Kyoen points",
       failedFetchHints: "Failed to fetch hints",
       unexpectedError: "Unexpected error",
-      darkMode: "Dark mode",
-      lightMode: "Light mode",
     },
   },
   ja: {
     translation: {
-      size: "サイズ",
-      sizeAiOnly: "9x9",
       order: "手番",
       youFirst: "あなた先手",
       youSecond: "あなた後手",
@@ -49,8 +43,6 @@ const resources = {
       kyoenPoints: "共円の点",
       failedFetchHints: "ヒントの取得に失敗しました",
       unexpectedError: "予期せぬエラーが発生しました",
-      darkMode: "ダークモード",
-      lightMode: "ライトモード",
     },
   },
 };
