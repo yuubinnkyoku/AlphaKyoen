@@ -31,7 +31,7 @@ const resources = {
   ja: {
     translation: {
       size: "サイズ",
-      sizeAiOnly: "9x9 (AIのみ)",
+      sizeAiOnly: "9x9",
       order: "手番",
       youFirst: "あなた先手",
       youSecond: "あなた後手",
