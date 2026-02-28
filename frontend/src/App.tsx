@@ -186,51 +186,10 @@ export default function App() {
   };
 
   return (
-    <div className={`grid place-items-center px-3.5 pt-6 pb-10 max-sm:px-2.5 max-sm:pt-3 max-sm:pb-6${dark ? " dark" : ""}`}>
-      <main className="grid gap-4 w-full max-w-[980px]">
-        <header className={`card-header relative border-2 rounded-[18px] px-5 py-[18px] backdrop-blur-sm ${dark ? "bg-[#0f172a]/70 border-[#334155]" : "bg-white/70 border-white"}`}>
-          <div className="absolute top-2.5 right-3.5 flex gap-1">
-            <button
-              className={`px-2 py-1 text-[11px] rounded-md font-bold border cursor-pointer transition-opacity ${
-                dark ? "border-[#475569]" : "border-line"
-              } ${dark ? "text-[#e4e8ef]" : ""} opacity-60 hover:opacity-100`}
-              onClick={() => setDark((d) => !d)}
-              aria-label={dark ? t("lightMode") : t("darkMode")}
-            >
-              {dark ? "☀️" : "🌙"}
-            </button>
-            <button
-              className={`px-2 py-1 text-[11px] rounded-md font-bold border cursor-pointer transition-opacity ${
-                dark ? "border-[#475569]" : "border-line"
-              } ${
-                i18n.language === "en"
-                  ? dark ? "bg-[#475569] text-white opacity-100" : "bg-line text-white opacity-100"
-                  : dark ? "bg-transparent text-[#e4e8ef] opacity-60 hover:opacity-80" : "bg-transparent text-ink opacity-60 hover:opacity-80"
-              }`}
-              onClick={() => changeLanguage("en")}
-            >
-              EN
-            </button>
-            <button
-              className={`px-2 py-1 text-[11px] rounded-md font-bold border cursor-pointer transition-opacity ${
-                dark ? "border-[#475569]" : "border-line"
-              } ${
-                i18n.language === "ja"
-                  ? dark ? "bg-[#475569] text-white opacity-100" : "bg-line text-white opacity-100"
-                  : dark ? "bg-transparent text-[#e4e8ef] opacity-60 hover:opacity-80" : "bg-transparent text-ink opacity-60 hover:opacity-80"
-              }`}
-              onClick={() => changeLanguage("ja")}
-            >
-              JA
-            </button>
-          </div>
-          <p className="m-0 font-display font-bold tracking-[0.08em] uppercase text-brand">{t("subtitle")}</p>
-          <h1 className="mt-1 mb-0.5 font-display font-bold text-[clamp(1.7rem,3vw,2.5rem)]">{t("title")}</h1>
-          <p className="m-0 opacity-[0.82]">{t("instruction")}</p>
-        </header>
-
-        <section className={`card border-2 rounded-2xl p-3.5 ${dark ? "bg-[#0f172a]/80 border-[#334155]" : "bg-white/80 border-white"}`}>
-          <div className="flex flex-wrap gap-2.5 items-center">
+    <div className={`grid place-items-center px-3.5 pt-3 pb-6 max-sm:px-2 max-sm:pt-2 max-sm:pb-4${dark ? " dark" : ""}`}>
+      <main className="grid gap-3 w-full max-w-[600px]">
+        <section className={`card border-2 rounded-2xl p-3 ${dark ? "bg-[#0f172a]/80 border-[#334155]" : "bg-white/80 border-white"}`}>
+          <div className="flex flex-wrap gap-2 items-center">
             <label htmlFor="size-select" className="font-display font-bold">{t("size")}</label>
             <select id="size-select" className="control-input" value="9x9" onChange={() => undefined}>
               <option value="9x9">{t("sizeAiOnly")}</option>
@@ -251,6 +210,42 @@ export default function App() {
             </button>
 
             <button type="button" className="btn" onClick={() => void onReset()}>{t("reset")}</button>
+
+            <span className="ml-auto flex gap-1">
+              <button
+                className={`px-2 py-1 text-[11px] rounded-md font-bold border cursor-pointer transition-opacity ${
+                  dark ? "border-[#475569]" : "border-line"
+                } ${dark ? "text-[#e4e8ef]" : ""} opacity-60 hover:opacity-100`}
+                onClick={() => setDark((d) => !d)}
+                aria-label={dark ? t("lightMode") : t("darkMode")}
+              >
+                {dark ? "☀️" : "🌙"}
+              </button>
+              <button
+                className={`px-2 py-1 text-[11px] rounded-md font-bold border cursor-pointer transition-opacity ${
+                  dark ? "border-[#475569]" : "border-line"
+                } ${
+                  i18n.language === "en"
+                    ? dark ? "bg-[#475569] text-white opacity-100" : "bg-line text-white opacity-100"
+                    : dark ? "bg-transparent text-[#e4e8ef] opacity-60 hover:opacity-80" : "bg-transparent text-ink opacity-60 hover:opacity-80"
+                }`}
+                onClick={() => changeLanguage("en")}
+              >
+                EN
+              </button>
+              <button
+                className={`px-2 py-1 text-[11px] rounded-md font-bold border cursor-pointer transition-opacity ${
+                  dark ? "border-[#475569]" : "border-line"
+                } ${
+                  i18n.language === "ja"
+                    ? dark ? "bg-[#475569] text-white opacity-100" : "bg-line text-white opacity-100"
+                    : dark ? "bg-transparent text-[#e4e8ef] opacity-60 hover:opacity-80" : "bg-transparent text-ink opacity-60 hover:opacity-80"
+                }`}
+                onClick={() => changeLanguage("ja")}
+              >
+                JA
+              </button>
+            </span>
           </div>
 
           <div className="mt-2.5 font-bold">{getStatusText(t, lastResult, state.turn, humanSide, isAiThinking)}</div>
@@ -263,7 +258,7 @@ export default function App() {
         </section>
 
         <section className="w-full grid place-items-center" aria-label="Kyoen board">
-          <svg className="block aspect-square w-full max-w-[94vw] sm:max-w-[560px]" viewBox="0 0 10 10" width="100%" height="100%">
+          <svg className="block aspect-square w-full max-w-[94vw] sm:max-w-[520px]" viewBox="0 0 10 10" width="100%" height="100%">
             {/* Grid Lines */}
             {Array.from({ length: SIZE }, (_, i) => i + 1).map((pos) => (
               <g key={`lines-${pos}`}>

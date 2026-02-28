@@ -77,9 +77,6 @@
   .dark .card {
     @apply bg-[#0f172a]/80 border-[#334155];
   }
-  .dark .card-header {
-    @apply bg-[#0f172a]/70 border-[#334155];
-  }
 
   .grid-line-dark {
     stroke: #8899aa;

@@ -5,9 +5,6 @@ import { initReactI18next } from "react-i18next";
 const resources = {
   en: {
     translation: {
-      title: "AI vs You",
-      subtitle: "AlphaKyoen",
-      instruction: "Place stones without creating any 4-point concyclic pattern.",
       size: "Size",
       sizeAiOnly: "9x9 (AI only)",
       order: "Order",
@@ -33,9 +30,6 @@ const resources = {
   },
   ja: {
     translation: {
-      title: "AI vs あなた",
-      subtitle: "AlphaKyoen",
-      instruction: "同一円周上の4点を作らないように石を置いてください。",
       size: "サイズ",
       sizeAiOnly: "9x9 (AIのみ)",
       order: "手番",
