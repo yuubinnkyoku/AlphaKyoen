@@ -1,5 +1,5 @@
 import { TFunction } from "i18next";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { aiMove, getHints, playerMove } from "./api";
 import type { GameState, MoveResponse, Turn } from "./types";
@@ -58,6 +58,16 @@ export default function App() {
   const [showHints, setShowHints] = useState(false);
   const [hintMoves, setHintMoves] = useState<number[]>([]);
   const [showResult, setShowResult] = useState(false);
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved) return saved === "dark";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
+
+  useEffect(() => {
+    document.body.classList.toggle("dark", dark);
+    localStorage.setItem("theme", dark ? "dark" : "light");
+  }, [dark]);
 
   const hintSet = useMemo(() => new Set(hintMoves), [hintMoves]);
   const resultSet = useMemo(() => new Set(lastResult?.kyoen_points ?? []), [lastResult]);
@@ -176,21 +186,38 @@ export default function App() {
   };
 
   return (
-    <div className="grid place-items-center px-3.5 pt-6 pb-10 max-sm:px-2.5 max-sm:pt-3 max-sm:pb-6">
+    <div className={`grid place-items-center px-3.5 pt-6 pb-10 max-sm:px-2.5 max-sm:pt-3 max-sm:pb-6${dark ? " dark" : ""}`}>
       <main className="grid gap-4 w-full max-w-[980px]">
-        <header className="relative bg-white/70 border-2 border-white rounded-[18px] px-5 py-[18px] backdrop-blur-sm">
+        <header className={`card-header relative border-2 rounded-[18px] px-5 py-[18px] backdrop-blur-sm ${dark ? "bg-[#0f172a]/70 border-[#334155]" : "bg-white/70 border-white"}`}>
           <div className="absolute top-2.5 right-3.5 flex gap-1">
             <button
-              className={`px-2 py-1 text-[11px] rounded-md font-bold border border-line cursor-pointer transition-opacity ${
-                i18n.language === "en" ? "bg-line text-white opacity-100" : "bg-transparent text-ink opacity-60 hover:opacity-80"
+              className={`px-2 py-1 text-[11px] rounded-md font-bold border cursor-pointer transition-opacity ${
+                dark ? "border-[#475569]" : "border-line"
+              } ${dark ? "text-[#e4e8ef]" : ""} opacity-60 hover:opacity-100`}
+              onClick={() => setDark((d) => !d)}
+              aria-label={dark ? t("lightMode") : t("darkMode")}
+            >
+              {dark ? "☀️" : "🌙"}
+            </button>
+            <button
+              className={`px-2 py-1 text-[11px] rounded-md font-bold border cursor-pointer transition-opacity ${
+                dark ? "border-[#475569]" : "border-line"
+              } ${
+                i18n.language === "en"
+                  ? dark ? "bg-[#475569] text-white opacity-100" : "bg-line text-white opacity-100"
+                  : dark ? "bg-transparent text-[#e4e8ef] opacity-60 hover:opacity-80" : "bg-transparent text-ink opacity-60 hover:opacity-80"
               }`}
               onClick={() => changeLanguage("en")}
             >
               EN
             </button>
             <button
-              className={`px-2 py-1 text-[11px] rounded-md font-bold border border-line cursor-pointer transition-opacity ${
-                i18n.language === "ja" ? "bg-line text-white opacity-100" : "bg-transparent text-ink opacity-60 hover:opacity-80"
+              className={`px-2 py-1 text-[11px] rounded-md font-bold border cursor-pointer transition-opacity ${
+                dark ? "border-[#475569]" : "border-line"
+              } ${
+                i18n.language === "ja"
+                  ? dark ? "bg-[#475569] text-white opacity-100" : "bg-line text-white opacity-100"
+                  : dark ? "bg-transparent text-[#e4e8ef] opacity-60 hover:opacity-80" : "bg-transparent text-ink opacity-60 hover:opacity-80"
               }`}
               onClick={() => changeLanguage("ja")}
             >
@@ -202,7 +229,7 @@ export default function App() {
           <p className="m-0 opacity-[0.82]">{t("instruction")}</p>
         </header>
 
-        <section className="bg-white/80 border-2 border-white rounded-2xl p-3.5">
+        <section className={`card border-2 rounded-2xl p-3.5 ${dark ? "bg-[#0f172a]/80 border-[#334155]" : "bg-white/80 border-white"}`}>
           <div className="flex flex-wrap gap-2.5 items-center">
             <label htmlFor="size-select" className="font-display font-bold">{t("size")}</label>
             <select id="size-select" className="control-input" value="9x9" onChange={() => undefined}>
@@ -241,9 +268,9 @@ export default function App() {
             {Array.from({ length: SIZE }, (_, i) => i + 1).map((pos) => (
               <g key={`lines-${pos}`}>
                 {/* Horizontal */}
-                <line x1={0.5} y1={pos} x2={9.5} y2={pos} stroke="#111" strokeWidth={0.03} />
+                <line x1={0.5} y1={pos} x2={9.5} y2={pos} stroke={dark ? "#8899aa" : "#111"} strokeWidth={0.03} />
                 {/* Vertical */}
-                <line x1={pos} y1={0.5} x2={pos} y2={9.5} stroke="#111" strokeWidth={0.03} />
+                <line x1={pos} y1={0.5} x2={pos} y2={9.5} stroke={dark ? "#8899aa" : "#111"} strokeWidth={0.03} />
               </g>
             ))}
 

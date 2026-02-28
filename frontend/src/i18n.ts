@@ -27,6 +27,8 @@ const resources = {
       kyoenPoints: "Kyoen points",
       failedFetchHints: "Failed to fetch hints",
       unexpectedError: "Unexpected error",
+      darkMode: "Dark mode",
+      lightMode: "Light mode",
     },
   },
   ja: {
@@ -53,6 +55,8 @@ const resources = {
       kyoenPoints: "共円の点",
       failedFetchHints: "ヒントの取得に失敗しました",
       unexpectedError: "予期せぬエラーが発生しました",
+      darkMode: "ダークモード",
+      lightMode: "ライトモード",
     },
   },
 };
