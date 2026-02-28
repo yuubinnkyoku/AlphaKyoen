@@ -201,7 +201,7 @@ export default function App() {
               <option value="second">{t("youSecond")}</option>
             </select>
 
-            <button type="button" className="btn" onClick={() => setShowResult((v) => !v)} disabled={!lastResult?.kyoen_points?.length}>
+            <button type="button" className="btn" onClick={() => setShowResult((v) => !v)}>
               {t("result")}
             </button>
 
