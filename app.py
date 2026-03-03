@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import sys
 from threading import Lock
-from typing import List
+from typing import Any, Callable, List
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
@@ -14,7 +14,6 @@ from pydantic import BaseModel, Field
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
 from game import Board  # noqa: E402
-from mcts import PolicyValueNet, mcts_search  # noqa: E402
 
 
 class GameState(BaseModel):
@@ -56,7 +55,8 @@ app.add_middleware(
 )
 
 _model_lock = Lock()
-_policy_model: PolicyValueNet | None = None
+_policy_model: Any | None = None
+_mcts_search_fn: Callable[..., int] | None = None
 
 
 @app.get("/")
@@ -108,11 +108,15 @@ def _board_to_response(board: Board, move: int, done: bool, reward: float, kyoen
     )
 
 
-def _get_policy_model() -> PolicyValueNet:
-    global _policy_model
+def _get_policy_model() -> Any:
+    global _policy_model, _mcts_search_fn
     with _model_lock:
         if _policy_model is None:
+            # Delay importing JAX/Flax-heavy modules until AI inference is requested.
+            from mcts import PolicyValueNet, mcts_search  # noqa: WPS433
+
             _policy_model = PolicyValueNet()
+            _mcts_search_fn = mcts_search
     return _policy_model
 
 
@@ -141,7 +145,10 @@ def post_ai_move(req: HintRequest) -> MoveResponse:
         raise HTTPException(status_code=400, detail="No valid moves available.")
 
     model = _get_policy_model()
-    ai_move = mcts_search(board, model, num_simulations=400)
+    if _mcts_search_fn is None:
+        raise HTTPException(status_code=500, detail="AI search function is not available.")
+
+    ai_move = _mcts_search_fn(board, model, num_simulations=200)
     _, reward, done, info = board.step(ai_move, return_details=True)
     return _board_to_response(board, ai_move, done, reward, info["kyoen_points"])
 
